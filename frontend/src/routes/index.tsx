@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { LoginPage } from "../pages/LoginPage";
 import { WorkspacePage } from "../pages/WorkspacePage";
+import { ProfilePage } from "../pages/ProfilePage";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 export const AppRoutes: React.FC = () => {
@@ -19,6 +20,14 @@ export const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <WorkspacePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />
