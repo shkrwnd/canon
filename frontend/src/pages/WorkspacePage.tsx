@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Module } from "../types";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
-import { ModuleList } from "../components/ModuleList";
+import { LeftSidebar } from "../components/LeftSidebar";
+import { RightSidebar } from "../components/RightSidebar";
 import { DocumentView } from "../components/DocumentView";
-import { ChatPanel } from "../components/ChatPanel";
 import { useQueryClient } from "@tanstack/react-query";
 
 export const WorkspacePage: React.FC = () => {
@@ -27,23 +27,19 @@ export const WorkspacePage: React.FC = () => {
 
   return (
     <WorkspaceLayout>
-      <div className="w-64 flex-shrink-0">
-        <ModuleList
-          selectedModuleId={selectedModule?.id || null}
-          onSelectModule={handleModuleSelected}
-        />
-      </div>
+      <LeftSidebar
+        selectedModuleId={selectedModule?.id || null}
+        onSelectModule={handleModuleSelected}
+      />
       <div className="flex-1 flex-shrink-0">
         <DocumentView module={selectedModule} />
       </div>
-      <div className="w-80 flex-shrink-0">
-        <ChatPanel
-          module={selectedModule}
-          chatId={chatId}
-          onChatCreated={setChatId}
-          onModuleUpdated={handleModuleUpdated}
-        />
-      </div>
+      <RightSidebar
+        module={selectedModule}
+        chatId={chatId}
+        onChatCreated={setChatId}
+        onModuleUpdated={handleModuleUpdated}
+      />
     </WorkspaceLayout>
   );
 };
