@@ -8,6 +8,7 @@ import { useModules } from "../hooks/useModules";
 export const WorkspacePage: React.FC = () => {
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [chatId, setChatId] = useState<number | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const queryClient = useQueryClient();
   const { data: modules } = useModules();
 
@@ -40,14 +41,31 @@ export const WorkspacePage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ["module", module.id] });
   };
 
+  const handleCreateModuleClick = () => {
+    setShowCreateForm(true);
+    // Focus the input in the sidebar after a brief delay
+    setTimeout(() => {
+      const input = document.querySelector('[data-module-name-input]') as HTMLInputElement;
+      if (input) {
+        input.focus();
+      }
+    }, 100);
+  };
+
   return (
     <WorkspaceLayout>
       <LeftSidebar
         selectedModuleId={selectedModule?.id || null}
         onSelectModule={handleModuleSelected}
+        showCreateForm={showCreateForm}
+        onShowCreateFormChange={setShowCreateForm}
       />
       <div className="flex-1 flex-shrink-0">
-        <DocumentView module={selectedModule} />
+        <DocumentView 
+          module={selectedModule} 
+          onCreateModule={handleCreateModuleClick}
+          hasModules={(modules?.length || 0) > 0}
+        />
       </div>
       <RightSidebar
         module={selectedModule}

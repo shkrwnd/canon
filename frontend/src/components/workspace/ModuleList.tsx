@@ -7,14 +7,31 @@ import { validateModuleForm } from "../../utils/validation.utils";
 interface ModuleListProps {
   selectedModuleId: number | null;
   onSelectModule: (module: Module | null) => void;
+  showCreateForm?: boolean;
+  onShowCreateFormChange?: (show: boolean) => void;
 }
 
-export const ModuleList: React.FC<ModuleListProps> = ({ selectedModuleId, onSelectModule }) => {
+export const ModuleList: React.FC<ModuleListProps> = ({ 
+  selectedModuleId, 
+  onSelectModule,
+  showCreateForm: externalShowCreateForm,
+  onShowCreateFormChange,
+}) => {
   const { data: modules, isLoading } = useModules();
   const createModule = useCreateModule();
   const deleteModule = useDeleteModule();
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [internalShowCreateForm, setInternalShowCreateForm] = useState(false);
   const [newModuleName, setNewModuleName] = useState("");
+
+  // Use external state if provided, otherwise use internal state
+  const showCreateForm = externalShowCreateForm !== undefined ? externalShowCreateForm : internalShowCreateForm;
+  const setShowCreateForm = (value: boolean) => {
+    if (onShowCreateFormChange) {
+      onShowCreateFormChange(value);
+    } else {
+      setInternalShowCreateForm(value);
+    }
+  };
 
   const handleCreate = async () => {
     const validation = validateModuleForm(newModuleName);
@@ -55,6 +72,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({ selectedModuleId, onSele
     <div className="flex flex-col h-full border-r">
       <div className="p-4 border-b">
         <Button
+          data-create-module
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="w-full"
           size="sm"
@@ -64,6 +82,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({ selectedModuleId, onSele
         {showCreateForm && (
           <div className="mt-2 space-y-2">
             <Input
+              data-module-name-input
               placeholder="Module name"
               value={newModuleName}
               onChange={(e) => setNewModuleName(e.target.value)}
