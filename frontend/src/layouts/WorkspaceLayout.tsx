@@ -10,6 +10,12 @@ export const WorkspaceLayout: React.FC = () => {
   const [chatId, setChatId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
+  const handleModuleSelected = (module: Module | null) => {
+    setSelectedModule(module);
+    // Reset chatId when module changes - each module should have its own chat
+    setChatId(null);
+  };
+
   const handleModuleUpdated = (module: Module) => {
     // Update the selected module
     setSelectedModule(module);
@@ -23,7 +29,7 @@ export const WorkspaceLayout: React.FC = () => {
       <div className="w-64 flex-shrink-0">
         <ModuleList
           selectedModuleId={selectedModule?.id || null}
-          onSelectModule={setSelectedModule}
+          onSelectModule={handleModuleSelected}
         />
       </div>
       <div className="flex-1 flex-shrink-0">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useChatMessages, useAddChatMessage } from "../hooks/useChat";
 import { useModule } from "../hooks/useModules";
 import { agentAction } from "../services/agentService";
@@ -20,11 +21,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onChatCreated,
   onModuleUpdated,
 }) => {
-  const { data: messages, isLoading } = useChatMessages(chatId);
+  const queryClient = useQueryClient();
+  const [localChatId, setLocalChatId] = useState<number | null>(chatId);
+  const { data: messages, isLoading } = useChatMessages(localChatId);
   const addMessage = useAddChatMessage();
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Update local chatId when prop changes
+  useEffect(() => {
+    if (chatId !== null) {
+      setLocalChatId(chatId);
+    }
+  }, [chatId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -46,12 +56,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       const response = await agentAction({
         message: userMessage,
         module_id: module.id,
-        chat_id: chatId || undefined,
+        chat_id: localChatId || undefined,
       });
 
-      // If chat was created, notify parent
-      if (response.chat_message.chat_id && !chatId && onChatCreated) {
-        onChatCreated(response.chat_message.chat_id);
+      // Update chatId if a new chat was created
+      const newChatId = response.chat_message.chat_id;
+      const finalChatId = newChatId || localChatId;
+      
+      if (newChatId && !localChatId) {
+        setLocalChatId(newChatId);
+        if (onChatCreated) {
+          onChatCreated(newChatId);
+        }
       }
 
       // If module was updated, notify parent
@@ -59,10 +75,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         onModuleUpdated(response.module);
       }
 
-      // Refresh messages
-      window.location.reload(); // Simple refresh for now
+      // Invalidate and refetch messages for this chat
+      if (finalChatId) {
+        queryClient.invalidateQueries({ queryKey: ["chatMessages", finalChatId] });
+      }
+      
+      // Also invalidate modules to refresh the module list
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      if (module.id) {
+        queryClient.invalidateQueries({ queryKey: ["module", module.id] });
+      }
     } catch (error: any) {
       alert(error.response?.data?.detail || "Failed to send message");
+      // Restore input on error
+      setInputValue(userMessage);
     } finally {
       setIsSending(false);
     }
@@ -81,6 +107,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="p-4 border-b">
         <h3 className="font-semibold">Chat</h3>
         <p className="text-sm text-gray-500">{module.name}</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Tip: You can reference other modules by name (e.g., "update the Blog Post module")
+        </p>
       </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {isLoading ? (

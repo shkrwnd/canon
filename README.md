@@ -97,6 +97,23 @@ The app will be available at `http://localhost:3000`
 4. **Manual Edit**: Click "Edit" button to manually edit the markdown
 5. **Agent Decisions**: The agent automatically decides when to edit, which module to edit, and when to search the web
 
+### Referencing Modules in Chat
+
+You can reference modules by name in your chat messages:
+
+- **Current Module**: When a module is selected, edits default to that module
+  - Example: "Add a section about benefits" (edits the currently selected module)
+  
+- **By Name**: Reference any module by its name
+  - Example: "Update the Blog Post module with a new introduction"
+  - Example: "Add a conclusion to my Skincare guide"
+  - Example: "Rewrite the Marketing Plan module"
+
+- **Contextual References**: Use phrases like "this module" or "current module"
+  - Example: "Make this module more concise"
+  
+The agent will automatically resolve module names and edit the correct one, even if you're viewing a different module.
+
 ## Project Structure
 
 ```

@@ -5,6 +5,7 @@ from ...models import User, Chat, ChatMessage, MessageRole
 from ...schemas import AgentActionRequest, AgentActionResponse, Module as ModuleSchema, ChatMessage as ChatMessageSchema
 from ...auth import get_current_user
 from ...agent import process_agent_action
+from ...openai_client import generate_conversational_response
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -23,16 +24,24 @@ async def agent_action(
             Chat.id == request.chat_id,
             Chat.user_id == current_user.id
         ).first()
-        if not chat:
+        if chat:
+            # Validate that the chat belongs to the requested module (if module_id is provided)
+            if request.module_id and chat.module_id != request.module_id:
+                # Chat exists but belongs to a different module - create a new chat for this module
+                chat = None
+        # If chat not found or doesn't match module, we'll create a new one below
+    
+    if not chat:
+        # Create new chat - use module_id from request or try to get from existing chat
+        module_id_to_use = request.module_id
+        if not module_id_to_use:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Chat not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="module_id is required to create a new chat"
             )
-    else:
-        # Create new chat if module_id is provided
         chat = Chat(
             user_id=current_user.id,
-            module_id=request.module_id
+            module_id=module_id_to_use
         )
         db.add(chat)
         db.commit()
@@ -57,13 +66,34 @@ async def agent_action(
     )
     
     # Prepare agent response message
-    agent_response_content = f"I processed your request."
-    if result["decision"].get("reasoning"):
-        agent_response_content += f" {result['decision']['reasoning']}"
-    if result.get("web_search_performed"):
-        agent_response_content += " I performed a web search to ensure accuracy."
-    if result.get("updated_module"):
-        agent_response_content += " I've updated the module content."
+    decision = result["decision"]
+    should_edit = decision.get("should_edit", False)
+    
+    # Check if there's a conversational response from the agent
+    conversational_response = decision.get("conversational_response")
+    
+    if should_edit and result.get("updated_module"):
+        # Edit was successful
+        agent_response_content = "I've updated the module content."
+        if decision.get("reasoning"):
+            agent_response_content += f" {decision['reasoning']}"
+        if result.get("web_search_performed"):
+            agent_response_content += " I performed a web search to ensure accuracy."
+    elif should_edit:
+        # Edit was attempted but failed
+        agent_response_content = "I understood your request, but couldn't update the module."
+        if decision.get("reasoning"):
+            agent_response_content += f" {decision['reasoning']}"
+    else:
+        # No edit - use conversational response if available, otherwise generate one
+        if conversational_response:
+            agent_response_content = conversational_response
+        else:
+            # Generate a conversational response for questions/general conversation
+            agent_response_content = await generate_conversational_response(
+                request.message,
+                result.get("decision", {}).get("reasoning", "")
+            )
     
     # Store agent response
     agent_message = ChatMessage(
