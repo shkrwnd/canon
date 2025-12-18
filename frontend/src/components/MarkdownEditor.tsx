@@ -71,7 +71,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     },
     editorProps: {
       attributes: {
-        class: "prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-full p-4",
+        class: "prose prose-sm max-w-none focus:outline-none min-h-full",
       },
     },
   });
@@ -200,8 +200,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         </Button>
       </div>
       {/* Editor Content */}
-      <div className="flex-1 overflow-auto" style={{ height }}>
-        <EditorContent editor={editor} />
+      <div className="flex-1 overflow-auto bg-white" style={{ height }}>
+        <div className="h-full">
+          <EditorContent editor={editor} />
+        </div>
       </div>
     </div>
   );
