@@ -1,7 +1,7 @@
 import React from "react";
 import { ResizablePanel } from "./ResizablePanel";
 import { ModuleList } from "./ModuleList";
-import { Module } from "../types";
+import { Module } from "../../types";
 
 interface LeftSidebarProps {
   selectedModuleId: number | null;

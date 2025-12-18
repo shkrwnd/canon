@@ -1,19 +1,4 @@
-export interface User {
-  id: number;
-  email: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Module {
-  id: number;
-  user_id: number;
-  name: string;
-  standing_instruction: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
+import { Module } from "./module.types";
 
 export interface Chat {
   id: number;
@@ -36,33 +21,6 @@ export interface ChatMessage {
   content: string;
   metadata?: Record<string, any>;
   created_at: string;
-}
-
-export interface Token {
-  access_token: string;
-  token_type: string;
-}
-
-export interface UserRegister {
-  email: string;
-  password: string;
-}
-
-export interface UserLogin {
-  email: string;
-  password: string;
-}
-
-export interface ModuleCreate {
-  name: string;
-  standing_instruction?: string;
-  content?: string;
-}
-
-export interface ModuleUpdate {
-  name?: string;
-  standing_instruction?: string;
-  content?: string;
 }
 
 export interface ChatCreate {
@@ -88,6 +46,4 @@ export interface AgentActionResponse {
   agent_decision: Record<string, any>;
   web_search_performed: boolean;
 }
-
-
 

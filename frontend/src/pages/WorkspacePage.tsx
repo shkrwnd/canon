@@ -1,9 +1,7 @@
 import React, { useState } from "react";
 import { Module } from "../types";
 import { WorkspaceLayout } from "../layouts/WorkspaceLayout";
-import { LeftSidebar } from "../components/LeftSidebar";
-import { RightSidebar } from "../components/RightSidebar";
-import { DocumentView } from "../components/DocumentView";
+import { LeftSidebar, RightSidebar, DocumentView } from "../components/workspace";
 import { useQueryClient } from "@tanstack/react-query";
 
 export const WorkspacePage: React.FC = () => {

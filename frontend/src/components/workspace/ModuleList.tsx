@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { useModules, useCreateModule, useDeleteModule } from "../hooks/useModules";
-import { Module } from "../types";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { validateModuleForm } from "../helpers/validationHelpers";
+import { useModules, useCreateModule, useDeleteModule } from "../../hooks/useModules";
+import { Module } from "../../types";
+import { Button, Input } from "../ui";
+import { validateModuleForm } from "../../utils/validation.utils";
 
 interface ModuleListProps {
   selectedModuleId: number | null;

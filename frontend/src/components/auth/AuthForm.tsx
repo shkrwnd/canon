@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { validateLoginForm, validateRegisterForm } from "../helpers/validationHelpers";
-import { UserLogin, UserRegister } from "../types";
+import { Button, Input } from "../ui";
+import { validateLoginForm, validateRegisterForm } from "../../utils/validation.utils";
+import { UserLogin, UserRegister } from "../../types";
 
 interface AuthFormProps {
   mode: "login" | "register";

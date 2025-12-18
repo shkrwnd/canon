@@ -1,7 +1,7 @@
-import apiClient from "../clients/apiClient";
-import { API_ENDPOINTS } from "../utils/constants";
-import { Token, UserRegister, UserLogin, User } from "../types";
-import { setAuthToken, removeAuthToken } from "../helpers/authHelpers";
+import { apiClient } from "../api";
+import { API_ENDPOINTS } from "../constants";
+import { Token, UserRegister, UserLogin } from "../types";
+import { setAuthToken, removeAuthToken } from "../utils/auth.utils";
 
 export const register = async (data: UserRegister): Promise<Token> => {
   const response = await apiClient.post<Token>(API_ENDPOINTS.AUTH.REGISTER, data);

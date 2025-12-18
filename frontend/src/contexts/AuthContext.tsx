@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { isAuthenticated, getAuthToken, removeAuthToken } from "../helpers/authHelpers";
+import { isAuthenticated, removeAuthToken } from "../utils/auth.utils";
 import { login as loginService, register as registerService } from "../services/authService";
 import { UserLogin, UserRegister } from "../types";
 

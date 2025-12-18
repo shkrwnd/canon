@@ -1,4 +1,4 @@
-import { STORAGE_KEYS } from "../utils/constants";
+import { STORAGE_KEYS } from "../constants";
 
 export const getAuthToken = (): string | null => {
   return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
@@ -15,6 +15,4 @@ export const removeAuthToken = (): void => {
 export const isAuthenticated = (): boolean => {
   return getAuthToken() !== null;
 };
-
-
 

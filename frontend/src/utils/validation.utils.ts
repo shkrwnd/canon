@@ -1,4 +1,4 @@
-import { validateEmail, validatePassword, validateModuleName } from "../utils/validators";
+import { validateEmail, validatePassword, validateModuleName } from "./validators";
 
 export const validateLoginForm = (email: string, password: string): { valid: boolean; errors: Record<string, string> } => {
   const errors: Record<string, string> = {};
@@ -52,6 +52,4 @@ export const validateModuleForm = (name: string): { valid: boolean; errors: Reco
     errors,
   };
 };
-
-
 

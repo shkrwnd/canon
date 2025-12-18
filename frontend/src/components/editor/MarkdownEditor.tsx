@@ -4,7 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TurndownService from "turndown";
 import { marked } from "marked";
-import { Button } from "./ui/button";
+import { Button } from "../ui";
 import { 
   Bold, 
   Italic, 

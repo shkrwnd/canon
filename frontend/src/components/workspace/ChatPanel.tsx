@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useChatMessages, useAddChatMessage } from "../hooks/useChat";
-import { useModule } from "../hooks/useModules";
-import { agentAction } from "../services/agentService";
-import { ChatMessage, MessageRole, Module } from "../types";
-import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
-import { formatRelativeTime } from "../utils/formatters";
+import { useChatMessages } from "../../hooks/useChat";
+import { agentAction } from "../../services/agentService";
+import { MessageRole, Module } from "../../types";
+import { Button, Textarea } from "../ui";
+import { formatRelativeTime } from "../../utils/formatters";
 
 interface ChatPanelProps {
   module: Module | null;
@@ -24,7 +22,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const queryClient = useQueryClient();
   const [localChatId, setLocalChatId] = useState<number | null>(chatId);
   const { data: messages, isLoading } = useChatMessages(localChatId);
-  const addMessage = useAddChatMessage();
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<Array<{id: string, content: string, role: MessageRole, created_at: string}>>([]);

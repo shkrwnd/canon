@@ -1,5 +1,5 @@
-import apiClient from "../clients/apiClient";
-import { API_ENDPOINTS } from "../utils/constants";
+import { apiClient } from "../api";
+import { API_ENDPOINTS } from "../constants";
 import { Module, ModuleCreate, ModuleUpdate } from "../types";
 
 export const getModules = async (): Promise<Module[]> => {

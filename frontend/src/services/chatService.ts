@@ -1,5 +1,5 @@
-import apiClient from "../clients/apiClient";
-import { API_ENDPOINTS } from "../utils/constants";
+import { apiClient } from "../api";
+import { API_ENDPOINTS } from "../constants";
 import { Chat, ChatCreate, ChatMessage, ChatMessageCreate } from "../types";
 
 export const getChats = async (): Promise<Chat[]> => {

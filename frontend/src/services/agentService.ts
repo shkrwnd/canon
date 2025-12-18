@@ -1,5 +1,5 @@
-import apiClient from "../clients/apiClient";
-import { API_ENDPOINTS } from "../utils/constants";
+import { apiClient } from "../api";
+import { API_ENDPOINTS } from "../constants";
 import { AgentActionRequest, AgentActionResponse } from "../types";
 
 export const agentAction = async (data: AgentActionRequest): Promise<AgentActionResponse> => {

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Module } from "../types";
-import { MarkdownEditor } from "./MarkdownEditor";
-import { Button } from "./ui/button";
-import { useUpdateModule } from "../hooks/useModules";
+import { Module } from "../../types";
+import { MarkdownEditor } from "../editor/MarkdownEditor";
+import { Button } from "../ui";
+import { useUpdateModule } from "../../hooks/useModules";
 
 interface DocumentViewProps {
   module: Module | null;

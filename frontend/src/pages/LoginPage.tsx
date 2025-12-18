@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthLayout } from "../layouts/AuthLayout";
-import { AuthForm } from "../components/AuthForm";
+import { AuthForm } from "../components/auth";
 import { useAuth } from "../hooks/useAuth";
 import { UserLogin, UserRegister } from "../types";
 

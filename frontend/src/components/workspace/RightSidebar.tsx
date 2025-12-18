@@ -1,7 +1,7 @@
 import React from "react";
 import { ResizablePanel } from "./ResizablePanel";
 import { ChatPanel } from "./ChatPanel";
-import { Module } from "../types";
+import { Module } from "../../types";
 
 interface RightSidebarProps {
   module: Module | null;
