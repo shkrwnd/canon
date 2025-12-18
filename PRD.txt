@@ -1,0 +1,97 @@
+Product Requirements Document (PRD)
+Cursor for Living Documents
+
+1. Product Overview
+Problem Statement:
+Current AI tools operate in a stateless or append-only manner. Users who work iteratively—writers, editors, founders, researchers, and power ChatGPT users—must repeatedly re-explain context, manually merge AI outputs, and manage multiple conflicting versions. There is no system that maintains a single evolving, authoritative document based on user intent.
+Product Vision:
+Build an agentic editor that maintains living documents. Users express intent in natural language; the system decides what to edit, when to edit, and when to search the web—similar to Cursor, but for non-code content.
+What This Product Is:
+- An intent-driven editorial workspace
+- A Markdown-first living document system
+- An agent that maintains correctness over time
+What This Product Is Not:
+- A traditional text editor (Google Docs, Word)
+- A note-taking app
+- A chatbot with memory
+- A task manager
+2. Target Users
+Primary Users:
+- Writers and screenwriters
+- Newspaper and magazine editors
+- ChatGPT power users
+Secondary Users:
+- Founders
+- Researchers and students
+- Knowledge workers with ADHD-style workflows
+3. Core Concept: Modules
+A module is a named, persistent, authoritative unit of state.
+Each module contains:
+- Name
+- Standing instruction
+- Current canonical state (Markdown)
+The agent always rewrites the full state—never appends.
+4. Agent Behavior
+Single-agent system in v1.
+Agent Responsibilities:
+- Detect intent
+- Resolve target module
+- Decide whether to edit
+- Decide whether web search is required
+- Rewrite entire module state
+- Persist canonical truth
+5. Manual Editing
+- Read-only by default
+- Explicit edit mode
+- Raw Markdown editing
+- Manual edits always override agent output
+6. Web Search Integration
+The agent performs web search only when necessary:
+- Safety-critical domains
+- New tools/products
+- Factual verification
+- “Latest” or “current” requests
+Search results are used internally to ensure correctness.
+7. User Interface
+Three-pane layout:
+- Left: Module list
+- Center: Rendered Markdown (authoritative state)
+- Right: Chat / command history
+The document is truth.
+Chat is intent.
+8. Markdown Model
+- Markdown is the source of truth
+- Rendered view by default
+- Raw Markdown editor in edit mode
+- No WYSIWYG abstraction
+9. UX Principles
+- Agent is default editor
+- User is override
+- Silence over suggestions
+- No background updates
+- No version history
+10. Non-Goals (v1)
+- Collaboration
+- Track changes
+- Diffs and history
+- Background agents
+- Rich formatting
+- Vector databases
+11. Tech Stack
+Backend:
+- FastAPI
+- SQLite
+- OpenAI GPT-4o
+- Tavily
+Frontend:
+- React + Vite
+- shadcn/ui
+- Tailwind
+- CodeMirror (Markdown)
+12. Success Metric
+Primary success signal:
+“I stopped maintaining this manually.”
+13. Positioning Statement
+This is not a text editor.
+It is an AI editor that maintains living documents.
+

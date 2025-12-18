@@ -1,17 +1,34 @@
-from typing import Dict, Any, Optional
-from openai import OpenAI
+from typing import Dict, Any, Optional, Union
+from openai import AzureOpenAI, OpenAI
 from .config import settings
 
 _client = None
 
-def get_client() -> OpenAI:
-    """Get or create OpenAI client (lazy initialization)"""
+def get_client() -> Union[OpenAI, AzureOpenAI]:
+    """Get or create OpenAI client (lazy initialization) - supports both Azure OpenAI and direct OpenAI"""
     global _client
     if _client is None:
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set. Please configure it in your .env file.")
-        _client = OpenAI(api_key=settings.openai_api_key)
+        # Prefer Azure OpenAI if configured
+        if settings.azure_openai_api_key and settings.azure_openai_base_url:
+            # Normalize the endpoint URL (remove trailing slash if present)
+            endpoint = settings.azure_openai_base_url.rstrip('/')
+            _client = AzureOpenAI(
+                api_key=settings.azure_openai_api_key,
+                api_version=settings.azure_openai_api_version,
+                azure_endpoint=endpoint
+            )
+        elif settings.openai_api_key:
+            # Fall back to direct OpenAI
+            _client = OpenAI(api_key=settings.openai_api_key)
+        else:
+            raise ValueError("Either AZURE_OPENAI_API_KEY or OPENAI_API_KEY must be set. Please configure it in your .env file.")
     return _client
+
+def get_model_name() -> str:
+    """Get the model name to use - Azure OpenAI model or default"""
+    if settings.azure_openai_api_key and settings.azure_openai_base_url:
+        return settings.azure_openai_chat_model
+    return "gpt-4o"  # Default for direct OpenAI
 
 
 def get_agent_decision_prompt(user_message: str, modules: list, current_module: Optional[Dict] = None) -> str:
@@ -92,9 +109,10 @@ async def get_agent_decision(user_message: str, modules: list, current_module: O
     """Get agent decision on what to do"""
     prompt = get_agent_decision_prompt(user_message, modules, current_module)
     client = get_client()
+    model_name = get_model_name()
     
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=model_name,
         messages=[
             {"role": "system", "content": "You are a helpful assistant that makes decisions about document editing. Always respond with valid JSON."},
             {"role": "user", "content": prompt}
@@ -117,9 +135,10 @@ async def rewrite_module_content(
     """Rewrite module content based on user intent"""
     prompt = get_module_rewrite_prompt(user_message, standing_instruction, current_content, web_search_results)
     client = get_client()
+    model_name = get_model_name()
     
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=model_name,
         messages=[
             {"role": "system", "content": "You are an expert editor that rewrites documents based on user intent. Return only the markdown content, no explanations."},
             {"role": "user", "content": prompt}
