@@ -4,6 +4,7 @@ from ..repositories import ModuleRepository
 from ..models import User, Module
 from ..schemas import ModuleCreate, ModuleUpdate
 from ..exceptions import NotFoundError, ValidationError
+from ..core.events import event_bus, ModuleCreatedEvent, ModuleUpdatedEvent, ModuleDeletedEvent
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,14 @@ class ModuleService:
             )
             self.module_repo.commit()
             logger.info(f"Module created successfully: {module.id}")
+            
+            # Publish event for cross-cutting concerns (notifications, audit logs, analytics)
+            event_bus.publish(ModuleCreatedEvent(
+                module_id=module.id,
+                user_id=user_id,
+                module_name=module.name
+            ))
+            
             return module
         except Exception as e:
             logger.error(f"Error creating module: {e}")
@@ -81,6 +90,14 @@ class ModuleService:
             if updated_module:
                 self.module_repo.commit()
                 logger.info(f"Module updated successfully: {module_id}")
+                
+                # Publish event for cross-cutting concerns (audit logs, analytics)
+                event_bus.publish(ModuleUpdatedEvent(
+                    module_id=module_id,
+                    user_id=user_id,
+                    changes=update_data
+                ))
+            
             return updated_module
         except Exception as e:
             logger.error(f"Error updating module: {e}")
@@ -96,9 +113,19 @@ class ModuleService:
             if not module:
                 raise NotFoundError("Module", str(module_id))
             
+            # Store module name before deletion for event
+            module_name = module.name
+            
             self.module_repo.delete(module_id)
             self.module_repo.commit()
             logger.info(f"Module deleted successfully: {module_id}")
+            
+            # Publish event for cross-cutting concerns (audit logs, cleanup)
+            event_bus.publish(ModuleDeletedEvent(
+                module_id=module_id,
+                user_id=user_id,
+                module_name=module_name
+            ))
         except Exception as e:
             logger.error(f"Error deleting module: {e}")
             self.module_repo.rollback()

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from .core.database import init_db
 from .core.logging_config import setup_logging
+from .core.events.handlers import register_event_handlers
 from .api.routes import auth, modules, chats, agent
 from .api.exceptions import (
     canon_exception_handler,
@@ -14,6 +15,9 @@ from .config import settings
 
 # Setup logging first
 setup_logging()
+
+# Register event handlers
+register_event_handlers()
 
 app = FastAPI(title="Canon API", version="1.0.0")
 

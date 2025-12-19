@@ -4,9 +4,10 @@ from ..repositories import ModuleRepository, ChatRepository
 from ..models import Module, ChatMessage, MessageRole
 from ..schemas import AgentActionRequest, AgentActionResponse, ChatCreate, ChatMessageCreate, Module as ModuleSchema, ChatMessage as ChatMessageSchema
 from ..exceptions import ValidationError
+from ..core.events import event_bus, AgentActionCompletedEvent
 from .llm_service import LLMService
 from .chat_service import ChatService
-from ..clients import LLMProviderFactory, search_web
+from ..clients import search_web
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,21 +16,17 @@ logger = logging.getLogger(__name__)
 class AgentService:
     """Service for agent operations"""
     
-    def __init__(self, db: Session, llm_service: Optional[LLMService] = None):
+    def __init__(self, db: Session, llm_service: LLMService):
         """
         Initialize agent service
         
         Args:
             db: Database session
-            llm_service: Optional LLM service. If None, creates default from config.
+            llm_service: LLM service (required, injected via dependency injection)
         """
         self.module_repo = ModuleRepository(db)
         self.chat_repo = ChatRepository(db)
         self.db = db
-        # Use provided service or create default
-        if llm_service is None:
-            provider = LLMProviderFactory.create_provider()
-            llm_service = LLMService(provider)
         self.llm_service = llm_service
     
     async def process_agent_action(
@@ -252,6 +249,20 @@ class AgentService:
         updated_module_schema = None
         if result.get("updated_module"):
             updated_module_schema = ModuleSchema(**result["updated_module"])
+        
+        # Publish event for cross-cutting concerns (analytics, monitoring)
+        event_bus.publish(AgentActionCompletedEvent(
+            user_id=user_id,
+            chat_id=chat.id,
+            module_id=request.module_id or chat.module_id,
+            action_type="agent_action",
+            success=result.get("updated_module") is not None,
+            metadata={
+                "should_edit": decision.get("should_edit", False),
+                "web_search_performed": result.get("web_search_performed", False),
+                "module_updated": result.get("updated_module") is not None
+            }
+        ))
         
         # Build and return response
         return AgentActionResponse(

@@ -8,6 +8,7 @@ from .security import (
     authenticate_user,
 )
 from .logging_config import setup_logging
+from .events import event_bus, Event, EventBus
 
 __all__ = [
     "Base",
@@ -21,5 +22,8 @@ __all__ = [
     "get_user_by_email",
     "authenticate_user",
     "setup_logging",
+    "event_bus",
+    "Event",
+    "EventBus",
 ]
 
