@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useModules, useCreateModule, useDeleteModule } from "../../hooks/useModules";
 import { Module } from "../../types";
-import { Button, Input } from "../ui";
+import { Button, Input, Dialog, useToast } from "../ui";
 import { validateModuleForm } from "../../utils/validation.utils";
 
 interface ModuleListProps {
@@ -20,8 +20,11 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   const { data: modules, isLoading } = useModules();
   const createModule = useCreateModule();
   const deleteModule = useDeleteModule();
+  const { showToast } = useToast();
   const [internalShowCreateForm, setInternalShowCreateForm] = useState(false);
   const [newModuleName, setNewModuleName] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [moduleToDelete, setModuleToDelete] = useState<number | null>(null);
 
   // Use external state if provided, otherwise use internal state
   const showCreateForm = externalShowCreateForm !== undefined ? externalShowCreateForm : internalShowCreateForm;
@@ -36,7 +39,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   const handleCreate = async () => {
     const validation = validateModuleForm(newModuleName);
     if (!validation.valid) {
-      alert(validation.errors.name);
+      showToast(validation.errors.name, "error");
       return;
     }
 
@@ -49,18 +52,32 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       setNewModuleName("");
       setShowCreateForm(false);
       onSelectModule(module);
+      showToast("Module created successfully", "success");
     } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to create module");
+      showToast(error.response?.data?.detail || "Failed to create module", "error");
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, moduleId: number) => {
+  const handleDeleteClick = (e: React.MouseEvent, moduleId: number) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this module?")) {
-      await deleteModule.mutateAsync(moduleId);
-      if (selectedModuleId === moduleId) {
+    setModuleToDelete(moduleId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (moduleToDelete === null) return;
+
+    try {
+      await deleteModule.mutateAsync(moduleToDelete);
+      if (selectedModuleId === moduleToDelete) {
         onSelectModule(null);
       }
+      showToast("Module deleted successfully", "success");
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || "Failed to delete module", "error");
+    } finally {
+      setDeleteDialogOpen(false);
+      setModuleToDelete(null);
     }
   };
 
@@ -117,7 +134,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
                     </div>
                   </div>
                   <button
-                    onClick={(e) => handleDelete(e, module.id)}
+                    onClick={(e) => handleDeleteClick(e, module.id)}
                     className="ml-2 text-red-500 hover:text-red-700 text-xs"
                   >
                     ×
@@ -128,6 +145,20 @@ export const ModuleList: React.FC<ModuleListProps> = ({
           </div>
         )}
       </div>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setModuleToDelete(null);
+        }}
+        title="Delete Module"
+        description="Are you sure you want to delete this module? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };

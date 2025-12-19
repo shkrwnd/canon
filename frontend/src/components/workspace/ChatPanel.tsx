@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useChatMessages } from "../../hooks/useChat";
 import { agentAction } from "../../services/agentService";
 import { MessageRole, Module } from "../../types";
-import { Button, Textarea } from "../ui";
+import { Button, Textarea, useToast } from "../ui";
 import { formatRelativeTime } from "../../utils/formatters";
 
 interface ChatPanelProps {
@@ -19,6 +19,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onChatCreated,
   onModuleUpdated,
 }) => {
+  const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [localChatId, setLocalChatId] = useState<number | null>(chatId);
   const { data: messages, isLoading } = useChatMessages(localChatId);
@@ -98,7 +99,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     } catch (error: any) {
       // Remove optimistic message on error
       setOptimisticMessages([]);
-      alert(error.response?.data?.detail || "Failed to send message");
+      showToast(error.response?.data?.detail || "Failed to send message", "error");
       // Restore input on error
       setInputValue(userMessage);
     } finally {
