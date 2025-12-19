@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ...database import get_db
+from ...core.database import get_db
+from ...core.security import get_current_user
 from ...models import User, Chat, ChatMessage, MessageRole
-from ...schemas import AgentActionRequest, AgentActionResponse, Module as ModuleSchema, ChatMessage as ChatMessageSchema
-from ...auth import get_current_user
-from ...agent import process_agent_action
-from ...openai_client import generate_conversational_response
+from ...schemas import AgentActionRequest, AgentActionResponse, Module as ModuleSchema, ChatMessage as ChatMessageSchema, ChatCreate, ChatMessageCreate
+from ...services import AgentService, ChatService
+from ...clients import generate_conversational_response
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -17,49 +20,47 @@ async def agent_action(
     db: Session = Depends(get_db)
 ):
     """Process agent action: detect intent, edit modules, perform web search"""
+    agent_service = AgentService(db)
+    chat_service = ChatService(db)
+    
     # Get or create chat
     chat = None
     if request.chat_id:
-        chat = db.query(Chat).filter(
-            Chat.id == request.chat_id,
-            Chat.user_id == current_user.id
-        ).first()
-        if chat:
+        try:
+            chat = chat_service.get_chat(current_user.id, request.chat_id)
             # Validate that the chat belongs to the requested module (if module_id is provided)
             if request.module_id and chat.module_id != request.module_id:
                 # Chat exists but belongs to a different module - create a new chat for this module
                 chat = None
-        # If chat not found or doesn't match module, we'll create a new one below
+        except Exception:
+            chat = None
     
     if not chat:
-        # Create new chat - use module_id from request or try to get from existing chat
+        # Create new chat - use module_id from request
         module_id_to_use = request.module_id
         if not module_id_to_use:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="module_id is required to create a new chat"
             )
-        chat = Chat(
-            user_id=current_user.id,
-            module_id=module_id_to_use
+        chat = chat_service.create_chat(
+            current_user.id,
+            ChatCreate(module_id=module_id_to_use)
         )
-        db.add(chat)
-        db.commit()
-        db.refresh(chat)
     
     # Store user message
-    user_message = ChatMessage(
-        chat_id=chat.id,
-        role=MessageRole.USER,
-        content=request.message,
-        message_metadata={}
+    user_message = chat_service.add_message(
+        current_user.id,
+        chat.id,
+        ChatMessageCreate(
+            role=MessageRole.USER,
+            content=request.message,
+            metadata={}
+        )
     )
-    db.add(user_message)
-    db.commit()
     
     # Process agent action
-    result = await process_agent_action(
-        db=db,
+    result = await agent_service.process_agent_action(
         user_id=current_user.id,
         user_message=request.message,
         module_id=request.module_id or chat.module_id
@@ -96,19 +97,19 @@ async def agent_action(
             )
     
     # Store agent response
-    agent_message = ChatMessage(
-        chat_id=chat.id,
-        role=MessageRole.ASSISTANT,
-        content=agent_response_content,
-        message_metadata={
-            "decision": result["decision"],
-            "web_search_performed": result.get("web_search_performed", False),
-            "module_updated": result.get("updated_module") is not None
-        }
+    agent_message = chat_service.add_message(
+        current_user.id,
+        chat.id,
+        ChatMessageCreate(
+            role=MessageRole.ASSISTANT,
+            content=agent_response_content,
+            metadata={
+                "decision": result["decision"],
+                "web_search_performed": result.get("web_search_performed", False),
+                "module_updated": result.get("updated_module") is not None
+            }
+        )
     )
-    db.add(agent_message)
-    db.commit()
-    db.refresh(agent_message)
     
     # Convert updated module to schema if exists
     updated_module_schema = None
@@ -121,4 +122,3 @@ async def agent_action(
         agent_decision=result["decision"],
         web_search_performed=result.get("web_search_performed", False)
     )
-

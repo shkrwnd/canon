@@ -1,6 +1,9 @@
 from typing import Dict, Any, Optional, Union
 from openai import AzureOpenAI, OpenAI
-from .config import settings
+from ..config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 _client = None
 
@@ -8,27 +11,26 @@ def get_client() -> Union[OpenAI, AzureOpenAI]:
     """Get or create OpenAI client (lazy initialization) - supports both Azure OpenAI and direct OpenAI"""
     global _client
     if _client is None:
-        # Prefer Azure OpenAI if configured
         if settings.azure_openai_api_key and settings.azure_openai_base_url:
-            # Normalize the endpoint URL (remove trailing slash if present)
             endpoint = settings.azure_openai_base_url.rstrip('/')
             _client = AzureOpenAI(
                 api_key=settings.azure_openai_api_key,
                 api_version=settings.azure_openai_api_version,
                 azure_endpoint=endpoint
             )
+            logger.info("Initialized Azure OpenAI client")
         elif settings.openai_api_key:
-            # Fall back to direct OpenAI
             _client = OpenAI(api_key=settings.openai_api_key)
+            logger.info("Initialized OpenAI client")
         else:
-            raise ValueError("Either AZURE_OPENAI_API_KEY or OPENAI_API_KEY must be set. Please configure it in your .env file.")
+            raise ValueError("Either AZURE_OPENAI_API_KEY or OPENAI_API_KEY must be set.")
     return _client
 
 def get_model_name() -> str:
     """Get the model name to use - Azure OpenAI model or default"""
     if settings.azure_openai_api_key and settings.azure_openai_base_url:
         return settings.azure_openai_chat_model
-    return "gpt-4o"  # Default for direct OpenAI
+    return "gpt-4o"
 
 
 def get_agent_decision_prompt(user_message: str, modules: list, current_module: Optional[Dict] = None) -> str:
@@ -55,6 +57,85 @@ MODULE RESOLUTION:
 - If no module is mentioned but there's a current module context, prefer the current module
 - If the user says "this module", "it", "the module", use the current module
 - Match module names flexibly (case-insensitive, partial matches are okay)
+
+WEB SEARCH DECISION:
+The agent performs web search ONLY when necessary. Search results are used internally to ensure correctness—they inform the rewrite but are not appended to the document.
+
+ALWAYS search when:
+1. Safety-critical domains:
+   - Medical information (symptoms, treatments, drug interactions, health advice)
+   - Legal information (laws, regulations, compliance requirements)
+   - Financial information (current rates, regulations, market data)
+   - Safety warnings or recalls
+
+2. New tools/products:
+   - Recently released software, apps, or services
+   - New product launches or updates
+   - Beta features or experimental tools
+   - Version-specific information for new releases
+
+3. Factual verification (when accuracy is critical):
+   - Statistics, numbers, or data that may be outdated
+   - Company information (founding dates, current leadership, recent changes)
+   - Technical specifications that change frequently
+   - Scientific findings or research updates
+
+4. Time-sensitive information:
+   - Explicit "latest" or "current" requests (e.g., "add the latest iPhone specs", "current interest rates")
+   - "As of [date]" or "in 2024" type requests
+   - Current events or breaking news
+   - Recent developments or updates
+
+5. User explicitly requests search:
+   - "Search for...", "Look up...", "Find current information about..."
+   - "What's the latest on...", "Check current..."
+
+NEVER search when:
+1. General knowledge that's stable:
+   - Historical facts (e.g., "when was World War II")
+   - Well-established concepts or definitions
+   - Common knowledge that doesn't change
+
+2. Creative content requests:
+   - Writing style, tone, or structure
+   - Creative writing, storytelling, or narrative
+   - Personal opinions or perspectives
+   - Style guides or formatting
+
+3. User's own content or preferences:
+   - Personal notes, ideas, or thoughts
+   - User's own writing style preferences
+   - Content organization or structure
+
+4. General writing advice:
+   - How to write better
+   - Grammar rules
+   - Writing techniques
+   - Editorial suggestions
+
+5. Questions about the system itself:
+   - How to use the editor
+   - Feature explanations
+   - General help or guidance
+
+6. Ambiguous or unclear requests:
+   - If you're not sure what to search for, don't search
+   - Vague requests that don't clearly need current information
+
+SEARCH QUERY GUIDELINES:
+- Be specific and focused (e.g., "iPhone 15 Pro Max specifications 2024" not "iPhone")
+- Include relevant context (e.g., "current Federal Reserve interest rates 2024")
+- Use natural language that will return relevant results
+- If the request is too vague to form a good search query, set needs_web_search to false
+
+Examples:
+- "Add the latest iPhone release date" → needs_web_search: true, search_query: "iPhone 15 release date 2024"
+- "Update with current interest rates" → needs_web_search: true, search_query: "current Federal Reserve interest rates 2024"
+- "Add information about diabetes treatment" → needs_web_search: true, search_query: "diabetes treatment guidelines 2024"
+- "Make it shorter" → needs_web_search: false
+- "Add a section about writing tips" → needs_web_search: false
+- "Update with the latest news about AI" → needs_web_search: true, search_query: "latest AI news 2024"
+- "Change the tone to be more formal" → needs_web_search: false
 
 Available modules:
 {modules_list}
@@ -94,7 +175,9 @@ RULES:
   * Any instruction describing what content should be in a module → edit request
 - Set should_edit to false ONLY for: pure greetings without any action, pure informational questions without any edit intent
 - If should_edit is true, you must provide module_id (resolve by name if mentioned, or use current module)
-- If needs_web_search is true, provide search_query
+- Set needs_web_search to true ONLY when the request falls into one of the categories listed in WEB SEARCH DECISION above
+- If needs_web_search is true, you MUST provide a specific, focused search_query (see SEARCH QUERY GUIDELINES above)
+- If you're uncertain whether to search, default to NOT searching (be conservative with web searches)
 - Provide conversational_response for non-edit messages (questions, greetings, general conversation) - this should be a natural, helpful response
 - When resolving module names, match flexibly but accurately
 - IMPORTANT: Be generous in interpreting edit intent - if there's any indication the user wants content changed, set should_edit to true"""
@@ -143,6 +226,7 @@ async def get_agent_decision(user_message: str, modules: list, current_module: O
     client = get_client()
     model_name = get_model_name()
     
+    logger.debug(f"Getting agent decision for message: {user_message[:50]}...")
     response = client.chat.completions.create(
         model=model_name,
         messages=[
@@ -155,6 +239,7 @@ async def get_agent_decision(user_message: str, modules: list, current_module: O
     
     import json
     decision = json.loads(response.choices[0].message.content)
+    logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, module_id={decision.get('module_id')}")
     return decision
 
 
@@ -169,6 +254,7 @@ async def rewrite_module_content(
     client = get_client()
     model_name = get_model_name()
     
+    logger.debug(f"Rewriting module content for message: {user_message[:50]}...")
     response = client.chat.completions.create(
         model=model_name,
         messages=[
@@ -178,7 +264,9 @@ async def rewrite_module_content(
         temperature=0.7
     )
     
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content.strip()
+    logger.debug(f"Module content rewritten, length: {len(content)}")
+    return content
 
 
 async def generate_conversational_response(user_message: str, context: str = "") -> str:

@@ -5,9 +5,13 @@ import bcrypt
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from .config import settings
-from .database import get_db
-from .models import User
+from ..config import settings
+from ..core.database import get_db
+from ..models import User
+from ..exceptions import AuthenticationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -15,27 +19,22 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash"""
     try:
-        # Convert string password to bytes
         password_bytes = plain_password.encode('utf-8')
-        # Convert hashed_password string to bytes if it's a string
         if isinstance(hashed_password, str):
             hashed_password_bytes = hashed_password.encode('utf-8')
         else:
             hashed_password_bytes = hashed_password
-        # Verify password
         return bcrypt.checkpw(password_bytes, hashed_password_bytes)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Password verification failed: {e}")
         return False
 
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt"""
-    # Convert password to bytes
     password_bytes = password.encode('utf-8')
-    # Generate salt and hash
     salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password_bytes, salt)
-    # Return as string
     return hashed.decode('utf-8')
 
 
@@ -48,6 +47,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.utcnow() + timedelta(hours=settings.jwt_expiration_hours)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    logger.debug(f"Created access token for user: {data.get('sub')}")
     return encoded_jwt
 
 
@@ -60,9 +60,12 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     """Authenticate a user"""
     user = get_user_by_email(db, email)
     if not user:
+        logger.warning(f"Authentication failed: user not found - {email}")
         return None
     if not verify_password(password, user.hashed_password):
+        logger.warning(f"Authentication failed: invalid password for {email}")
         return None
+    logger.info(f"User authenticated successfully: {email}")
     return user
 
 
@@ -71,20 +74,19 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from JWT token"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         email: str = payload.get("sub")
         if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+            raise AuthenticationError("Invalid token payload")
+    except JWTError as e:
+        logger.warning(f"JWT decode error: {e}")
+        raise AuthenticationError("Could not validate credentials")
+    
     user = get_user_by_email(db, email=email)
     if user is None:
-        raise credentials_exception
+        logger.warning(f"User not found for token: {email}")
+        raise AuthenticationError("User not found")
+    
     return user
 
