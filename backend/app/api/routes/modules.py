@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
 from typing import List
-from ...core.database import get_db
 from ...core.security import get_current_user
 from ...models import User
 from ...schemas import Module as ModuleSchema, ModuleCreate, ModuleUpdate
 from ...services import ModuleService
+from ..dependencies import get_module_service
 
 router = APIRouter(prefix="/modules", tags=["modules"])
 
@@ -13,10 +12,9 @@ router = APIRouter(prefix="/modules", tags=["modules"])
 @router.get("", response_model=List[ModuleSchema])
 def list_modules(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    module_service: ModuleService = Depends(get_module_service)
 ):
     """List all modules for the current user"""
-    module_service = ModuleService(db)
     return module_service.list_modules(current_user.id)
 
 
@@ -24,10 +22,9 @@ def list_modules(
 def create_module(
     module_data: ModuleCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    module_service: ModuleService = Depends(get_module_service)
 ):
     """Create a new module"""
-    module_service = ModuleService(db)
     return module_service.create_module(current_user.id, module_data)
 
 
@@ -35,10 +32,9 @@ def create_module(
 def get_module(
     module_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    module_service: ModuleService = Depends(get_module_service)
 ):
     """Get a specific module"""
-    module_service = ModuleService(db)
     return module_service.get_module(current_user.id, module_id)
 
 
@@ -47,10 +43,9 @@ def update_module(
     module_id: int,
     module_data: ModuleUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    module_service: ModuleService = Depends(get_module_service)
 ):
     """Update a module"""
-    module_service = ModuleService(db)
     return module_service.update_module(current_user.id, module_id, module_data)
 
 
@@ -58,9 +53,8 @@ def update_module(
 def delete_module(
     module_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    module_service: ModuleService = Depends(get_module_service)
 ):
     """Delete a module"""
-    module_service = ModuleService(db)
     module_service.delete_module(current_user.id, module_id)
     return None

@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from ...core.database import get_db
 from ...core.security import get_current_user
 from ...models import User, Chat, ChatMessage, MessageRole
 from ...schemas import AgentActionRequest, AgentActionResponse, Module as ModuleSchema, ChatMessage as ChatMessageSchema, ChatCreate, ChatMessageCreate
 from ...services import AgentService, ChatService, LLMService
-from ...clients import LLMProviderFactory
+from ..dependencies import get_agent_service, get_chat_service, get_llm_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,13 +15,11 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 async def agent_action(
     request: AgentActionRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    agent_service: AgentService = Depends(get_agent_service),
+    chat_service: ChatService = Depends(get_chat_service),
+    llm_service: LLMService = Depends(get_llm_service)
 ):
     """Process agent action: detect intent, edit modules, perform web search"""
-    # Create LLM service with default provider
-    llm_service = LLMService(LLMProviderFactory.create_provider())
-    agent_service = AgentService(db, llm_service=llm_service)
-    chat_service = ChatService(db)
     
     # Get or create chat
     chat = None

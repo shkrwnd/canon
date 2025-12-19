@@ -2,6 +2,10 @@ import React, { useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
 import TurndownService from "turndown";
 import { marked } from "marked";
 import { Button } from "../ui";
@@ -14,7 +18,8 @@ import {
   Heading2, 
   Heading3,
   Quote,
-  Code
+  Code,
+  Table as TableIcon
 } from "lucide-react";
 
 interface MarkdownEditorProps {
@@ -27,6 +32,44 @@ interface MarkdownEditorProps {
 const turndownService = new TurndownService({
   headingStyle: "atx",
   codeBlockStyle: "fenced",
+});
+
+// Add table support to Turndown
+turndownService.addRule("table", {
+  filter: "table",
+  replacement: function (content, node) {
+    const table = node as HTMLTableElement;
+    const rows: string[] = [];
+    
+    // Process header row
+    const thead = table.querySelector("thead");
+    if (thead) {
+      const headerRow = thead.querySelector("tr");
+      if (headerRow) {
+        const cells = Array.from(headerRow.querySelectorAll("th, td"))
+          .map((cell) => {
+            const text = turndownService.turndown(cell.innerHTML).trim();
+            return text.replace(/\n/g, " ");
+          });
+        rows.push("| " + cells.join(" | ") + " |");
+        rows.push("| " + cells.map(() => "---").join(" | ") + " |");
+      }
+    }
+    
+    // Process body rows
+    const tbody = table.querySelector("tbody") || table;
+    const bodyRows = tbody.querySelectorAll("tr");
+    bodyRows.forEach((row) => {
+      const cells = Array.from(row.querySelectorAll("td, th"))
+        .map((cell) => {
+          const text = turndownService.turndown(cell.innerHTML).trim();
+          return text.replace(/\n/g, " ");
+        });
+      rows.push("| " + cells.join(" | ") + " |");
+    });
+    
+    return "\n\n" + rows.join("\n") + "\n\n";
+  },
 });
 
 export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
@@ -61,6 +104,12 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           levels: [1, 2, 3],
         },
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
@@ -197,6 +246,22 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           title="Code Block"
         >
           <Code className="h-4 w-4" />
+        </Button>
+        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <Button
+          variant={editor.isActive("table") ? "default" : "ghost"}
+          size="sm"
+          onClick={() => {
+            if (editor.isActive("table")) {
+              editor.chain().focus().deleteTable().run();
+            } else {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+            }
+          }}
+          className="h-8 w-8 p-0"
+          title="Insert Table"
+        >
+          <TableIcon className="h-4 w-4" />
         </Button>
       </div>
       {/* Editor Content */}
