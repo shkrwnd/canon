@@ -190,6 +190,69 @@ code {
   line-height: 1.75;
 }
 
+/* Markdown Table Styles */
+.prose table {
+  width: 100%;
+  table-layout: auto;
+  text-align: left;
+  margin-top: 2em;
+  margin-bottom: 2em;
+  font-size: 0.875em;
+  line-height: 1.7142857;
+  border-collapse: collapse;
+  border: 1px solid #e5e7eb;
+}
+
+.prose thead {
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.prose thead th {
+  color: #111827;
+  font-weight: 600;
+  vertical-align: bottom;
+  padding: 0.5714286em;
+  border-right: 1px solid #e5e7eb;
+}
+
+.prose thead th:last-child {
+  border-right: none;
+}
+
+.prose tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.prose tbody tr:last-child {
+  border-bottom: none;
+}
+
+.prose tbody td {
+  vertical-align: baseline;
+  padding: 0.5714286em;
+  border-right: 1px solid #e5e7eb;
+}
+
+.prose tbody td:last-child {
+  border-right: none;
+}
+
+.prose tfoot {
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.prose tfoot td {
+  vertical-align: baseline;
+  padding: 0.5714286em;
+  border-right: 1px solid #e5e7eb;
+}
+
+.prose tfoot td:last-child {
+  border-right: none;
+}
+
 /* Toast animations */
 @keyframes slideInRight {
   from {

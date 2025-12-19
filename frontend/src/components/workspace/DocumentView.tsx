@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { FileText, Plus, Sparkles, MessageSquare, Zap } from "lucide-react";
 import { Module } from "../../types";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
@@ -139,7 +140,9 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModu
           <MarkdownEditor value={editContent} onChange={setEditContent} height="100%" />
         ) : (
           <div className="prose max-w-none">
-            <ReactMarkdown>{module.content || "*No content yet*"}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {module.content || "*No content yet*"}
+            </ReactMarkdown>
           </div>
         )}
       </div>
