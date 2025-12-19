@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from ..clients.providers.base import LLMProvider
+from ..clients.llm_providers.base import LLMProvider
 from .prompt_service import PromptService
 import json
 import logging

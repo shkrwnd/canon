@@ -1,6 +1,8 @@
 from typing import Optional
-from .providers import LLMProvider, OpenAIProvider, AzureOpenAIProvider
-from ..config import settings
+from .base import LLMProvider
+from .openai_provider import OpenAIProvider
+from .azure_openai_provider import AzureOpenAIProvider
+from ...config import settings
 import logging
 
 logger = logging.getLogger(__name__)
