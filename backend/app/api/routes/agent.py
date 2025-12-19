@@ -4,8 +4,8 @@ from ...core.database import get_db
 from ...core.security import get_current_user
 from ...models import User, Chat, ChatMessage, MessageRole
 from ...schemas import AgentActionRequest, AgentActionResponse, Module as ModuleSchema, ChatMessage as ChatMessageSchema, ChatCreate, ChatMessageCreate
-from ...services import AgentService, ChatService
-from ...clients import generate_conversational_response
+from ...services import AgentService, ChatService, LLMService
+from ...clients import LLMProviderFactory
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,9 @@ async def agent_action(
     db: Session = Depends(get_db)
 ):
     """Process agent action: detect intent, edit modules, perform web search"""
-    agent_service = AgentService(db)
+    # Create LLM service with default provider
+    llm_service = LLMService(LLMProviderFactory.create_provider())
+    agent_service = AgentService(db, llm_service=llm_service)
     chat_service = ChatService(db)
     
     # Get or create chat
@@ -91,7 +93,7 @@ async def agent_action(
             agent_response_content = conversational_response
         else:
             # Generate a conversational response for questions/general conversation
-            agent_response_content = await generate_conversational_response(
+            agent_response_content = await llm_service.generate_conversational_response(
                 request.message,
                 result.get("decision", {}).get("reasoning", "")
             )

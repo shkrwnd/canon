@@ -2,7 +2,8 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 from ..repositories import ModuleRepository, ChatRepository
 from ..models import Module
-from ..clients import get_agent_decision, rewrite_module_content, generate_conversational_response, search_web
+from .llm_service import LLMService
+from ..clients import LLMProviderFactory, search_web
 import logging
 
 logger = logging.getLogger(__name__)
@@ -11,10 +12,22 @@ logger = logging.getLogger(__name__)
 class AgentService:
     """Service for agent operations"""
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, llm_service: Optional[LLMService] = None):
+        """
+        Initialize agent service
+        
+        Args:
+            db: Database session
+            llm_service: Optional LLM service. If None, creates default from config.
+        """
         self.module_repo = ModuleRepository(db)
         self.chat_repo = ChatRepository(db)
         self.db = db
+        # Use provided service or create default
+        if llm_service is None:
+            provider = LLMProviderFactory.create_provider()
+            llm_service = LLMService(provider)
+        self.llm_service = llm_service
     
     async def process_agent_action(
         self,
@@ -54,7 +67,7 @@ class AgentService:
                     }
             
             # Get agent decision
-            decision = await get_agent_decision(user_message, modules_list, current_module)
+            decision = await self.llm_service.get_agent_decision(user_message, modules_list, current_module)
             
             web_search_performed = False
             web_search_results = None
@@ -74,7 +87,7 @@ class AgentService:
                 if target_module:
                     logger.info(f"Rewriting module {target_module_id}")
                     # Rewrite the entire module content
-                    new_content = await rewrite_module_content(
+                    new_content = await self.llm_service.rewrite_module_content(
                         user_message=user_message,
                         standing_instruction=target_module.standing_instruction,
                         current_content=target_module.content,
