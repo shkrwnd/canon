@@ -27,8 +27,16 @@ EDIT INTENT DETECTION:
 - Edit when users give instructions about content (e.g., "make it shorter", "add a section about X", "include Y in Z")
 - Edit when users say things like: "it should have X", "add X to it", "make it X", "change it to X"
 - Phrases like "update X with Y", "add Y to X", "make X Y" are ALWAYS edit requests
-- DO NOT edit ONLY for: pure greetings without any action, pure informational questions without requests
-- When in doubt about edit intent, lean towards interpreting it as an edit request if a module is mentioned
+
+DO NOT edit for:
+- Questions asking "is there X?", "what is X?", "does it have X?" (these are informational questions, not edit requests)
+- Requests for suggestions ("suggest me...", "what should I...", "how can I make it...") - these are asking for advice, not requesting edits
+- Vague feedback without clear action ("not good", "doesn't work", "wrong") - these need clarification first
+- Disagreement without specific changes ("no it doesn't", "that's wrong", "incorrect") - these need clarification
+- Pure greetings without any action
+- Pure informational questions without any edit intent
+
+When in doubt about edit intent, be CONSERVATIVE - default to NOT editing unless there's a clear, explicit request for content changes
 
 MODULE RESOLUTION:
 - Users can reference modules by name in their messages (e.g., "update the Skincare module", "edit my Blog Post")
@@ -68,6 +76,14 @@ ALWAYS search when:
 5. User explicitly requests search:
    - "Search for...", "Look up...", "Find current information about..."
    - "What's the latest on...", "Check current..."
+
+6. Travel and location-specific information:
+   - Hotel names, prices, and booking information
+   - Tourist attractions and place names (for accuracy)
+   - Restaurant recommendations with current information
+   - Activity locations (ice skating rinks, museums, events, etc.)
+   - Travel itineraries requiring current data (prices, availability, schedules)
+   - Destination-specific information that may change
 
 NEVER search when:
 1. General knowledge that's stable:
@@ -111,10 +127,14 @@ Examples:
 - "Add the latest iPhone release date" → needs_web_search: true, search_query: "iPhone 15 release date 2024"
 - "Update with current interest rates" → needs_web_search: true, search_query: "current Federal Reserve interest rates 2024"
 - "Add information about diabetes treatment" → needs_web_search: true, search_query: "diabetes treatment guidelines 2024"
+- "Give me hotel names" → needs_web_search: true, search_query: "hotels [location] prices 2024"
+- "Add ice skating options" → needs_web_search: true, search_query: "ice skating rinks [location] 2024"
 - "Make it shorter" → needs_web_search: false
 - "Add a section about writing tips" → needs_web_search: false
 - "Update with the latest news about AI" → needs_web_search: true, search_query: "latest AI news 2024"
 - "Change the tone to be more formal" → needs_web_search: false
+- "Is there ice skating here?" → should_edit: false (question, not edit request)
+- "Suggest me what changes to make" → should_edit: false (asking for advice, not edit request)
 
 Available modules:
 {modules_list}
@@ -138,11 +158,12 @@ Current user message: "{user_message}"
     "needs_web_search": boolean,
     "reasoning": string,
     "search_query": string or null,
-    "conversational_response": string or null
+    "conversational_response": string or null,
+    "change_summary": string or null
 }
 
 RULES:
-- Set should_edit to true if the user requests any content changes (directly or indirectly)
+- Set should_edit to true ONLY if the user explicitly requests content changes (directly or indirectly)
 - Examples that SHOULD trigger edits: 
   * "update X with Y" → edit request
   * "add Z to X" → edit request  
@@ -150,16 +171,25 @@ RULES:
   * "change X to Y" → edit request
   * "edit X" → edit request
   * "modify X" → edit request
-  * "it should have X" → edit request (if module context exists)
-  * Any instruction describing what content should be in a module → edit request
-- Set should_edit to false ONLY for: pure greetings without any action, pure informational questions without any edit intent
+  * "it should have X" → edit request (if module context exists and it's a clear instruction)
+  * Any clear instruction describing what content should be in a module → edit request
+- Examples that should NOT trigger edits:
+  * "is there X?" → question, not edit request
+  * "suggest me..." → asking for advice, not edit request
+  * "not good" → vague feedback, needs clarification (set should_edit: false, ask for clarification in conversational_response)
+  * "no it doesn't" → disagreement without specific changes (set should_edit: false, ask what to change)
+- Set should_edit to false for: pure greetings, informational questions, requests for suggestions, vague feedback
 - If should_edit is true, you must provide module_id (resolve by name if mentioned, or use current module)
+- If should_edit is true, provide a brief change_summary (1-2 sentences, under 50 words) describing what will be changed
+  * change_summary should be user-friendly and concise (e.g., "Added hotel recommendations for Miami with prices")
+  * Focus on what will be added, removed, or modified
 - Set needs_web_search to true ONLY when the request falls into one of the categories listed in WEB SEARCH DECISION above
 - If needs_web_search is true, you MUST provide a specific, focused search_query (see SEARCH QUERY GUIDELINES above)
 - If you're uncertain whether to search, default to NOT searching (be conservative with web searches)
-- Provide conversational_response for non-edit messages (questions, greetings, general conversation) - this should be a natural, helpful response
+- Provide conversational_response for non-edit messages (questions, greetings, general conversation, vague feedback) - this should be a natural, helpful response
+- For vague feedback, use conversational_response to ask for clarification (e.g., "Could you specify what you'd like me to change?")
 - When resolving module names, match flexibly but accurately
-- IMPORTANT: Be generous in interpreting edit intent - if there's any indication the user wants content changed, set should_edit to true"""
+- IMPORTANT: Be CONSERVATIVE in interpreting edit intent - only set should_edit to true when there's a clear, explicit request for content changes"""
         
         return prompt
     

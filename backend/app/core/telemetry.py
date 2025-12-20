@@ -81,7 +81,11 @@ def setup_telemetry(app):
     
     # Automatically instrument SQLAlchemy
     # This tracks all database queries and their timing
-    SQLAlchemyInstrumentor().instrument()
+    # Enable detailed query tracking (including SELECT, INSERT, UPDATE, DELETE)
+    SQLAlchemyInstrumentor().instrument(
+        enable_commenter=True,  # Add comments to queries for better tracking
+        commenter_options={"db_driver": True, "db_framework": True}
+    )
     
     # Automatically instrument HTTP clients (httpx, requests)
     # This tracks all external HTTP calls (LLM APIs, Tavily, etc.)
