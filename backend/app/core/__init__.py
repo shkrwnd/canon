@@ -9,6 +9,7 @@ from .security import (
 )
 from .logging_config import setup_logging
 from .events import event_bus, Event, EventBus
+from .telemetry import setup_telemetry, get_tracer
 
 __all__ = [
     "Base",
@@ -25,5 +26,7 @@ __all__ = [
     "event_bus",
     "Event",
     "EventBus",
+    "setup_telemetry",
+    "get_tracer",
 ]
 

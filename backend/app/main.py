@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from .core.database import init_db
 from .core.logging_config import setup_logging
 from .core.events.handlers import register_event_handlers
+from .core.telemetry import setup_telemetry
 from .api.routes import auth, modules, chats, agent
 from .api.exceptions import (
     canon_exception_handler,
@@ -20,6 +21,10 @@ setup_logging()
 register_event_handlers()
 
 app = FastAPI(title="Canon API", version="1.0.0")
+
+# Setup OpenTelemetry instrumentation (before including routers)
+# This automatically tracks all requests, DB queries, and HTTP calls
+setup_telemetry(app)
 
 # CORS middleware
 app.add_middleware(

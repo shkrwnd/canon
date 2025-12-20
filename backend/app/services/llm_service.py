@@ -1,12 +1,14 @@
 from typing import Dict, Any, Optional
 from ..clients.llm_providers.base import LLMProvider
 from .prompt_service import PromptService
+from ..core.telemetry import get_tracer
 from ..config import settings
 import asyncio
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class LLMService:
@@ -71,18 +73,35 @@ class LLMService:
         
         logger.debug(f"Getting agent decision for message: {user_message[:50]}...")
         
-        # Rate limit with semaphore
-        async with self._semaphore:
-            response_text = await self.provider.chat_completion(
-                messages=messages,
-                model=self.provider.get_default_model(),
-                temperature=0.5,
-                response_format=response_format
-            )
+        model = self.provider.get_default_model()
+        provider_name = self.provider.__class__.__name__
         
-        decision = json.loads(response_text)
-        logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, module_id={decision.get('module_id')}")
-        return decision
+        # Create custom span for LLM operation
+        with tracer.start_as_current_span("llm.get_agent_decision") as span:
+            span.set_attribute("llm.operation", "agent_decision")
+            span.set_attribute("llm.model", model)
+            span.set_attribute("llm.provider", provider_name)
+            span.set_attribute("llm.temperature", 0.5)
+            span.set_attribute("llm.response_format", "json" if response_format else "text")
+            
+            # Rate limit with semaphore
+            async with self._semaphore:
+                with tracer.start_as_current_span("llm.api_call") as api_span:
+                    api_span.set_attribute("llm.api.type", "chat_completion")
+                    api_span.set_attribute("llm.api.model", model)
+                    response_text = await self.provider.chat_completion(
+                        messages=messages,
+                        model=model,
+                        temperature=0.5,
+                        response_format=response_format
+                    )
+                    api_span.set_attribute("llm.response.length", len(response_text))
+            
+            decision = json.loads(response_text)
+            span.set_attribute("llm.decision.should_edit", decision.get('should_edit', False))
+            span.set_attribute("llm.decision.module_id", decision.get('module_id'))
+            logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, module_id={decision.get('module_id')}")
+            return decision
     
     async def rewrite_module_content(
         self,
@@ -117,16 +136,33 @@ class LLMService:
         
         logger.debug(f"Rewriting module content for message: {user_message[:50]}...")
         
-        # Rate limit with semaphore
-        async with self._semaphore:
-            content = await self.provider.chat_completion(
-                messages=messages,
-                model=self.provider.get_default_model(),
-                temperature=0.7
-            )
+        model = self.provider.get_default_model()
+        provider_name = self.provider.__class__.__name__
         
-        logger.debug(f"Module content rewritten, length: {len(content)}")
-        return content.strip()
+        # Create custom span for LLM operation
+        with tracer.start_as_current_span("llm.rewrite_module_content") as span:
+            span.set_attribute("llm.operation", "rewrite_module_content")
+            span.set_attribute("llm.model", model)
+            span.set_attribute("llm.provider", provider_name)
+            span.set_attribute("llm.temperature", 0.7)
+            span.set_attribute("llm.input.content_length", len(current_content))
+            span.set_attribute("llm.input.has_web_search", web_search_results is not None)
+            
+            # Rate limit with semaphore
+            async with self._semaphore:
+                with tracer.start_as_current_span("llm.api_call") as api_span:
+                    api_span.set_attribute("llm.api.type", "chat_completion")
+                    api_span.set_attribute("llm.api.model", model)
+                    content = await self.provider.chat_completion(
+                        messages=messages,
+                        model=model,
+                        temperature=0.7
+                    )
+                    api_span.set_attribute("llm.response.length", len(content))
+            
+            span.set_attribute("llm.output.content_length", len(content))
+            logger.debug(f"Module content rewritten, length: {len(content)}")
+            return content.strip()
     
     async def generate_conversational_response(
         self,
@@ -153,13 +189,29 @@ class LLMService:
             {"role": "user", "content": prompt}
         ]
         
-        # Rate limit with semaphore
-        async with self._semaphore:
-            response = await self.provider.chat_completion(
-                messages=messages,
-                model=self.provider.get_default_model(),
-                temperature=0.7
-            )
+        model = self.provider.get_default_model()
+        provider_name = self.provider.__class__.__name__
         
-        return response.strip()
+        # Create custom span for LLM operation
+        with tracer.start_as_current_span("llm.generate_conversational_response") as span:
+            span.set_attribute("llm.operation", "conversational_response")
+            span.set_attribute("llm.model", model)
+            span.set_attribute("llm.provider", provider_name)
+            span.set_attribute("llm.temperature", 0.7)
+            span.set_attribute("llm.input.has_context", bool(context))
+            
+            # Rate limit with semaphore
+            async with self._semaphore:
+                with tracer.start_as_current_span("llm.api_call") as api_span:
+                    api_span.set_attribute("llm.api.type", "chat_completion")
+                    api_span.set_attribute("llm.api.model", model)
+                    response = await self.provider.chat_completion(
+                        messages=messages,
+                        model=model,
+                        temperature=0.7
+                    )
+                    api_span.set_attribute("llm.response.length", len(response))
+            
+            span.set_attribute("llm.output.length", len(response))
+            return response.strip()
 

@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     cors_origins: list = ["http://localhost:3000"]
     # LLM Rate Limiting
     llm_max_concurrent_requests: int = 10  # Max concurrent API calls
+    # Telemetry
+    telemetry_enabled: bool = True  # Enable OpenTelemetry
+    telemetry_exporter: str = "jaeger"  # "console", "jaeger", or "both"
+    jaeger_agent_host: str = "localhost"
+    jaeger_agent_port: int = 14268
     
     class Config:
         env_file = ".env"
