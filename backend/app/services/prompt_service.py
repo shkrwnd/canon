@@ -14,127 +14,85 @@ class PromptService:
         current_module: Optional[Dict] = None
     ) -> str:
         """Generate prompt for agent decision-making"""
-        modules_list = "\n".join([f"- {m['name']} (id: {m['id']})" for m in modules])
+        modules_list = "\n".join([f"- {m['name']} (id: {m['id']})" for m in modules]) if modules else "No modules available"
         
-        prompt = f"""You are a helpful AI assistant that helps users manage and edit their living documents (modules). You can:
-1. Have normal conversations and answer questions
-2. Edit modules when users request changes (directly or indirectly)
-3. Help users understand how to use the system
+        prompt = f"""You are a helpful AI assistant that helps users manage and edit their living documents (modules).
 
-EDIT INTENT DETECTION:
-- Edit when users request changes using words like: update, add, change, modify, edit, rewrite, include, remove, delete, create, write, make, set, put, insert, append
-- Edit when users describe what they want in a module (e.g., "update the skin module with greetings" = edit request)
-- Edit when users give instructions about content (e.g., "make it shorter", "add a section about X", "include Y in Z")
-- Edit when users say things like: "it should have X", "add X to it", "make it X", "change it to X"
-- Phrases like "update X with Y", "add Y to X", "make X Y" are ALWAYS edit requests
+=== USER CONTROL PRINCIPLE ===
+The user is ALWAYS in control. Never edit or create modules unless explicitly asked.
+Default to CONVERSATION, not action. Assume the user wants to talk, not change things.
 
-DO NOT edit for:
-- Questions asking "is there X?", "what is X?", "does it have X?" (these are informational questions, not edit requests)
-- Requests for suggestions ("suggest me...", "what should I...", "how can I make it...") - these are asking for advice, not requesting edits
-- Vague feedback without clear action ("not good", "doesn't work", "wrong") - these need clarification first
-- Disagreement without specific changes ("no it doesn't", "that's wrong", "incorrect") - these need clarification
-- Pure greetings without any action
-- Pure informational questions without any edit intent
+=== DECISION CATEGORIES ===
+Classify every user message into one of these categories:
 
-When in doubt about edit intent, be CONSERVATIVE - default to NOT editing unless there's a clear, explicit request for content changes
+1. CONVERSATION (should_edit: false, needs_clarification: false)
+   - Questions, greetings, feedback, suggestions, informational requests
+   - "What should I add?" = give advice, DON'T edit
+   - "This could be better" = ask what they want, DON'T edit
+   - "Summarize here" = provide summary in chat, DON'T edit module
+   - "Tell me about X" = provide information in chat, DON'T edit
 
-MODULE RESOLUTION:
-- Users can reference modules by name in their messages (e.g., "update the Skincare module", "edit my Blog Post")
-- If a module name is mentioned, use that module's ID
-- If no module is mentioned but there's a current module context, prefer the current module
-- If the user says "this module", "it", "the module", use the current module
-- Match module names flexibly (case-insensitive, partial matches are okay)
+2. EDIT_REQUEST (should_edit: true)
+   - Explicit request to modify existing module
+   - REQUIRES: action word + module reference (explicit or clear from context)
+   - Action words: "add", "update", "change", "remove", "edit", "rewrite", "modify", "delete", "insert"
+   - Examples: "Add hotels to travel module", "Update the blog post", "Remove the budget section"
 
-WEB SEARCH DECISION:
-The agent performs web search ONLY when necessary. Search results are used internally to ensure correctness—they inform the rewrite but are not appended to the document.
+3. CREATE_REQUEST (should_create: true)
+   - Explicit request to create new module
+   - REQUIRES: "create", "new module", "start a new", or similar
+   - Examples: "Create a new module for recipes", "Make a new travel guide"
 
-ALWAYS search when:
-1. Safety-critical domains:
-   - Medical information (symptoms, treatments, drug interactions, health advice)
-   - Legal information (laws, regulations, compliance requirements)
-   - Financial information (current rates, regulations, market data)
-   - Safety warnings or recalls
+4. NEEDS_CLARIFICATION (needs_clarification: true)
+   - Could be an edit request but missing information
+   - Missing which module to edit
+   - Vague or ambiguous request
+   - Examples: "Add desserts" (which module?), "Make it better" (what specifically?)
 
-2. New tools/products:
-   - Recently released software, apps, or services
-   - New product launches or updates
-   - Beta features or experimental tools
-   - Version-specific information for new releases
+5. NEEDS_CONFIRMATION (pending_confirmation: true)
+   - Destructive action (delete, remove, clear)
+   - Large structural changes
+   - Examples: "Delete the budget section", "Remove all content", "Clear the module"
 
-3. Factual verification (when accuracy is critical):
-   - Statistics, numbers, or data that may be outdated
-   - Company information (founding dates, current leadership, recent changes)
-   - Technical specifications that change frequently
-   - Scientific findings or research updates
+=== EXPLICIT ACTION REQUIRED ===
+Only trigger edits when user uses CLEAR action verbs:
+- EDIT triggers: "add", "update", "change", "remove", "edit", "rewrite", "modify", "delete", "insert", "put", "include"
+- CREATE triggers: "create", "make a new", "start a new module", "new module for"
 
-4. Time-sensitive information:
-   - Explicit "latest" or "current" requests (e.g., "add the latest iPhone specs", "current interest rates")
-   - "As of [date]" or "in 2024" type requests
-   - Current events or breaking news
-   - Recent developments or updates
+NOT edit triggers (these are suggestions/questions, not commands):
+- "should have", "could include", "maybe add", "might want", "consider adding"
+- "what about", "how about", "wouldn't it be nice"
+- Questions: "is there", "does it have", "what is"
 
-5. User explicitly requests search:
-   - "Search for...", "Look up...", "Find current information about..."
-   - "What's the latest on...", "Check current..."
+=== MODULE RESOLUTION ===
+- If user mentions a module by name, use that module's ID
+- If user says "this", "it", "the module" and there's current module context, use current module
+- If user doesn't specify which module and edit is requested, set needs_clarification: true
 
-6. Travel and location-specific information:
-   - Hotel names, prices, and booking information
-   - Tourist attractions and place names (for accuracy)
-   - Restaurant recommendations with current information
-   - Activity locations (ice skating rinks, museums, events, etc.)
-   - Travel itineraries requiring current data (prices, availability, schedules)
-   - Destination-specific information that may change
+=== WEB SEARCH DECISION ===
+Search ONLY when necessary for accuracy:
 
-NEVER search when:
-1. General knowledge that's stable:
-   - Historical facts (e.g., "when was World War II")
-   - Well-established concepts or definitions
-   - Common knowledge that doesn't change
+ALWAYS search for:
+1. Safety-critical: Medical, legal, financial information
+2. New products/tools: Recently released software, products, services
+3. Factual data: Statistics, current prices, specifications that change
+4. Time-sensitive: "latest", "current", explicit dates, news
+5. Travel/location: Hotel names/prices, attractions, restaurants, activities
 
-2. Creative content requests:
-   - Writing style, tone, or structure
-   - Creative writing, storytelling, or narrative
-   - Personal opinions or perspectives
-   - Style guides or formatting
+NEVER search for:
+1. Stable knowledge: Historical facts, well-established concepts
+2. Creative requests: Writing style, tone, structure, creative content
+3. User's content: Personal notes, preferences, organization
+4. General advice: Writing tips, grammar, system usage
 
-3. User's own content or preferences:
-   - Personal notes, ideas, or thoughts
-   - User's own writing style preferences
-   - Content organization or structure
+=== DESTRUCTIVE ACTIONS ===
+For these actions, set pending_confirmation: true:
+- Deleting sections or content
+- Removing significant portions
+- Clearing or resetting modules
+- Large structural changes
 
-4. General writing advice:
-   - How to write better
-   - Grammar rules
-   - Writing techniques
-   - Editorial suggestions
-
-5. Questions about the system itself:
-   - How to use the editor
-   - Feature explanations
-   - General help or guidance
-
-6. Ambiguous or unclear requests:
-   - If you're not sure what to search for, don't search
-   - Vague requests that don't clearly need current information
-
-SEARCH QUERY GUIDELINES:
-- Be specific and focused (e.g., "iPhone 15 Pro Max specifications 2024" not "iPhone")
-- Include relevant context (e.g., "current Federal Reserve interest rates 2024")
-- Use natural language that will return relevant results
-- If the request is too vague to form a good search query, set needs_web_search to false
-
-Examples:
-- "Add the latest iPhone release date" → needs_web_search: true, search_query: "iPhone 15 release date 2024"
-- "Update with current interest rates" → needs_web_search: true, search_query: "current Federal Reserve interest rates 2024"
-- "Add information about diabetes treatment" → needs_web_search: true, search_query: "diabetes treatment guidelines 2024"
-- "Give me hotel names" → needs_web_search: true, search_query: "hotels [location] prices 2024"
-- "Add ice skating options" → needs_web_search: true, search_query: "ice skating rinks [location] 2024"
-- "Make it shorter" → needs_web_search: false
-- "Add a section about writing tips" → needs_web_search: false
-- "Update with the latest news about AI" → needs_web_search: true, search_query: "latest AI news 2024"
-- "Change the tone to be more formal" → needs_web_search: false
-- "Is there ice skating here?" → should_edit: false (question, not edit request)
-- "Suggest me what changes to make" → should_edit: false (asking for advice, not edit request)
+Provide confirmation_prompt explaining what will happen and asking for approval.
 
 Available modules:
 {modules_list}
@@ -146,50 +104,110 @@ Current user message: "{user_message}"
         if current_module:
             prompt += f"""Current module context:
 - Name: {current_module['name']}
+- ID: {current_module['id']}
 - Standing Instruction: {current_module.get('standing_instruction', '')}
 - Current Content: {current_module.get('content', '')}
+
+"""
+        else:
+            prompt += """No current module context (user has not selected a module).
+If user wants to edit without specifying a module, set needs_clarification: true.
 
 """
         
         prompt += """Respond with a JSON object containing:
 {
     "should_edit": boolean,
+    "should_create": boolean,
     "module_id": integer or null,
+    "needs_clarification": boolean,
+    "pending_confirmation": boolean,
     "needs_web_search": boolean,
-    "reasoning": string,
+    "clarification_question": string or null,
+    "confirmation_prompt": string or null,
+    "intent_statement": string or null,
     "search_query": string or null,
+    "reasoning": string,
     "conversational_response": string or null,
     "change_summary": string or null
 }
 
-RULES:
-- Set should_edit to true ONLY if the user explicitly requests content changes (directly or indirectly)
-- Examples that SHOULD trigger edits: 
-  * "update X with Y" → edit request
-  * "add Z to X" → edit request  
-  * "make X shorter" → edit request
-  * "change X to Y" → edit request
-  * "edit X" → edit request
-  * "modify X" → edit request
-  * "it should have X" → edit request (if module context exists and it's a clear instruction)
-  * Any clear instruction describing what content should be in a module → edit request
-- Examples that should NOT trigger edits:
-  * "is there X?" → question, not edit request
-  * "suggest me..." → asking for advice, not edit request
-  * "not good" → vague feedback, needs clarification (set should_edit: false, ask for clarification in conversational_response)
-  * "no it doesn't" → disagreement without specific changes (set should_edit: false, ask what to change)
-- Set should_edit to false for: pure greetings, informational questions, requests for suggestions, vague feedback
-- If should_edit is true, you must provide module_id (resolve by name if mentioned, or use current module)
-- If should_edit is true, provide a brief change_summary (1-2 sentences, under 50 words) describing what will be changed
-  * change_summary should be user-friendly and concise (e.g., "Added hotel recommendations for Miami with prices")
-  * Focus on what will be added, removed, or modified
-- Set needs_web_search to true ONLY when the request falls into one of the categories listed in WEB SEARCH DECISION above
-- If needs_web_search is true, you MUST provide a specific, focused search_query (see SEARCH QUERY GUIDELINES above)
-- If you're uncertain whether to search, default to NOT searching (be conservative with web searches)
-- Provide conversational_response for non-edit messages (questions, greetings, general conversation, vague feedback) - this should be a natural, helpful response
-- For vague feedback, use conversational_response to ask for clarification (e.g., "Could you specify what you'd like me to change?")
-- When resolving module names, match flexibly but accurately
-- IMPORTANT: Be CONSERVATIVE in interpreting edit intent - only set should_edit to true when there's a clear, explicit request for content changes"""
+=== FIELD RULES ===
+
+should_edit:
+- Set true ONLY for explicit edit requests with clear action words
+- Set false for questions, suggestions, feedback, greetings
+
+should_create:
+- Set true ONLY for explicit create requests ("create a new module", "make a new X")
+- Set false otherwise
+
+module_id:
+- Provide only if should_edit is true AND you know which module
+- Resolve by name if mentioned, or use current module if clearly referenced
+- Leave null if needs_clarification is true
+
+needs_clarification:
+- Set true if user wants to edit/create but information is missing
+- Missing: which module, what specifically to change, vague request
+- Provide clarification_question asking for the missing info
+
+pending_confirmation:
+- Set true for destructive actions (delete, remove, clear)
+- Provide confirmation_prompt explaining what will happen
+
+intent_statement:
+- If should_edit or should_create is true, briefly state what you'll do
+- Example: "I'll add hotel recommendations to the Travel Itinerary module"
+- This shows user what will happen before you do it
+
+needs_web_search:
+- Set true only for categories listed in WEB SEARCH DECISION
+- If true, provide specific search_query
+
+reasoning:
+- Brief explanation of your decision (1 sentence)
+
+conversational_response:
+- For non-edit messages: provide helpful, natural response
+- For summarize/read requests: include actual content summary from module
+- For clarification: include your clarification_question
+- For confirmation: include your confirmation_prompt
+
+change_summary:
+- Only if should_edit is true
+- Brief description of what will be changed (1-2 sentences, under 50 words)
+
+=== EXAMPLES ===
+
+User: "Add hotel recommendations to travel module"
+→ should_edit: true, module_id: <travel_id>, intent_statement: "I'll add hotel recommendations to the Travel module", change_summary: "Adding hotel recommendations with prices"
+
+User: "What should I add to make it better?"
+→ should_edit: false, conversational_response: "Based on your content, you might consider..."
+
+User: "Add a dessert section"
+→ needs_clarification: true, clarification_question: "Which module should I add the dessert section to? You have: [list modules]"
+
+User: "Delete the budget section"
+→ pending_confirmation: true, confirmation_prompt: "I'll remove the Budget section from the Travel module. This will delete all budget information. Should I proceed?"
+
+User: "Hi!"
+→ should_edit: false, conversational_response: "Hello! How can I help you with your documents today?"
+
+User: "Summarize the module"
+→ should_edit: false, conversational_response: "Here's a summary of your Travel module: [actual summary from content]"
+
+User: "Create a new module for recipes"
+→ should_create: true, intent_statement: "I'll create a new module called 'Recipes'"
+
+=== CRITICAL RULES ===
+1. Default to CONVERSATION - assume user wants to talk unless explicitly requesting changes
+2. Require EXPLICIT action words for edits/creates
+3. Ask for clarification when information is missing - don't guess
+4. Confirm destructive actions before proceeding
+5. Show intent before acting - tell user what you'll do
+6. Be CONSERVATIVE - when in doubt, don't edit"""
         
         return prompt
     
@@ -255,7 +273,14 @@ Return ONLY the new complete markdown content. Do not include any explanations o
 
 {context if context else ""}
 
-Provide a helpful, friendly, and conversational response. If they're asking how to do something, explain it clearly. If it's a greeting, respond warmly. If it's a question, answer it helpfully. Be natural and conversational."""
+Provide a helpful, friendly, and conversational response. 
+- If they're asking how to do something, explain it clearly
+- If it's a greeting, respond warmly
+- If it's a question, answer it helpfully
+- If they ask to "summarize" or "summarize here", provide a brief summary of the module content in your response
+- If they ask you to "read" or "read the docs", read the module content and provide relevant information
+- If they ask for suggestions, provide helpful suggestions
+- Be natural and conversational, but concise"""
         
         return prompt
 

@@ -261,21 +261,50 @@ class AgentService:
             # Prepare agent response message
             decision = result["decision"]
             should_edit = decision.get("should_edit", False)
+            should_create = decision.get("should_create", False)
+            needs_clarification = decision.get("needs_clarification", False)
+            pending_confirmation = decision.get("pending_confirmation", False)
             conversational_response = decision.get("conversational_response")
+            intent_statement = decision.get("intent_statement")
+            change_summary = decision.get("change_summary")
+            clarification_question = decision.get("clarification_question")
+            confirmation_prompt = decision.get("confirmation_prompt")
             
-            # Format agent response content
-            if should_edit and result.get("updated_module"):
-                # Edit was successful
-                agent_response_content = "I've updated the module content."
-                if decision.get("reasoning"):
-                    agent_response_content += f" {decision['reasoning']}"
+            # Format agent response content based on decision type
+            if needs_clarification:
+                # Need more information from user
+                agent_response_content = clarification_question or "Could you please provide more details about what you'd like me to do?"
+            
+            elif pending_confirmation:
+                # Need user confirmation before proceeding
+                agent_response_content = confirmation_prompt or "This action requires confirmation. Should I proceed?"
+            
+            elif should_create:
+                # Module creation requested (not implemented yet, but prepared)
+                agent_response_content = intent_statement or "I'll create a new module for you."
+                # TODO: Implement module creation flow
+            
+            elif should_edit and result.get("updated_module"):
+                # Edit was successful - show what was done
+                parts = []
+                if intent_statement:
+                    parts.append(intent_statement)
+                if change_summary:
+                    parts.append(f"**Changes made:** {change_summary}")
                 if result.get("web_search_performed"):
-                    agent_response_content += " I performed a web search to ensure accuracy."
+                    parts.append("I performed a web search to ensure accuracy.")
+                
+                if parts:
+                    agent_response_content = " ".join(parts)
+                else:
+                    agent_response_content = "I've updated the module content."
+            
             elif should_edit:
                 # Edit was attempted but failed
                 agent_response_content = "I understood your request, but couldn't update the module."
                 if decision.get("reasoning"):
                     agent_response_content += f" {decision['reasoning']}"
+            
             else:
                 # No edit - use conversational response if available, otherwise generate one
                 if conversational_response:
@@ -283,9 +312,24 @@ class AgentService:
                 else:
                     # Generate a conversational response for questions/general conversation
                     logger.debug("Generating conversational response")
+                    
+                    # If we have a current module and user is asking to summarize/read, pass module content
+                    current_module_content = None
+                    module_id_to_check = request.module_id or chat.module_id
+                    if module_id_to_check:
+                        module = self.module_repo.get_by_user_and_id(user_id, module_id_to_check)
+                        if module:
+                            current_module_content = module.content
+                    
+                    # Build context with module content if available and user is asking for info
+                    context = result.get("decision", {}).get("reasoning", "")
+                    user_message_lower = request.message.lower()
+                    if current_module_content and any(keyword in user_message_lower for keyword in ["summarize", "read", "tell me about", "what's in", "show me", "describe"]):
+                        context = f"Module content:\n{current_module_content}\n\n{context if context else 'User is asking about the module content.'}"
+                    
                     agent_response_content = await self.llm_service.generate_conversational_response(
                         request.message,
-                        result.get("decision", {}).get("reasoning", "")
+                        context
                     )
             
             # Store agent response
@@ -302,7 +346,10 @@ class AgentService:
                         metadata={
                             "decision": result["decision"],
                             "web_search_performed": result.get("web_search_performed", False),
-                            "module_updated": result.get("updated_module") is not None
+                            "module_updated": result.get("updated_module") is not None,
+                            "needs_clarification": needs_clarification,
+                            "pending_confirmation": pending_confirmation,
+                            "should_create": should_create
                         }
                     )
                 )
@@ -321,7 +368,10 @@ class AgentService:
                 action_type="agent_action",
                 success=result.get("updated_module") is not None,
                 metadata={
-                    "should_edit": decision.get("should_edit", False),
+                    "should_edit": should_edit,
+                    "should_create": should_create,
+                    "needs_clarification": needs_clarification,
+                    "pending_confirmation": pending_confirmation,
                     "web_search_performed": result.get("web_search_performed", False),
                     "module_updated": result.get("updated_module") is not None
                 }
