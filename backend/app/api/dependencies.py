@@ -66,8 +66,12 @@ def _get_llm_service() -> LLMService:
     Returns:
         LLMService instance
     """
+    from ..config import settings
     provider = LLMProviderFactory.create_provider()
-    return LLMService(provider)
+    return LLMService(
+        provider,
+        max_concurrent_requests=getattr(settings, 'llm_max_concurrent_requests', 10)
+    )
 
 
 def get_llm_service() -> LLMService:

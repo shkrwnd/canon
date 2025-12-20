@@ -193,6 +193,26 @@ Current module content:
 3. Maintain consistency with the standing instruction
 4. Ensure the content is complete and coherent
 5. If web search results were provided, use them to ensure factual accuracy
+6. **CRITICALLY IMPORTANT - OUTPUT FORMAT**: 
+   - Return ONLY pure markdown text - NO HTML tags (no <p>, <strong>, <em>, etc.)
+   - Use markdown syntax: **bold**, *italic*, [links](url), `code`, etc.
+   - Tables must be in markdown format with proper spacing (blank lines before/after)
+   - Example table format:
+     | Header 1 | Header 2 |
+     |----------|----------|
+     | Cell 1   | Cell 2   |
+7. **CRITICALLY IMPORTANT - PRESERVE FORMATTING**: You must preserve ALL existing markdown formatting and structure:
+   - **Tables**: Keep all markdown tables exactly as they are, including headers, rows, and cell content, unless the user explicitly asks to modify a specific table
+   - **Links**: Preserve all [text](url) links exactly as written
+   - **Images**: Preserve all ![alt](url) image references exactly as written
+   - **Code blocks**: Preserve all ```code``` blocks with their language identifiers and content
+   - **Inline code**: Preserve all `inline code` formatting
+   - **Lists**: Preserve all bullet lists, numbered lists, and nested lists with their exact structure
+   - **Headings**: Preserve heading levels (H1, H2, H3, etc.) unless the user requests a structural change
+   - **Blockquotes**: Preserve all > blockquote formatting
+   - **Other formatting**: Preserve bold, italic, strikethrough, and other markdown syntax
+   - **Structure**: Only modify content that directly relates to the user's specific request
+   - **Selective editing**: If the user asks to "add X" or "update Y section", preserve everything else unchanged and only modify/add what was requested
 
 Return ONLY the new complete markdown content. Do not include any explanations or metadata."""
         

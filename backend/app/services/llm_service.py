@@ -1,6 +1,8 @@
 from typing import Dict, Any, Optional
 from ..clients.llm_providers.base import LLMProvider
 from .prompt_service import PromptService
+from ..config import settings
+import asyncio
 import json
 import logging
 
@@ -10,16 +12,27 @@ logger = logging.getLogger(__name__)
 class LLMService:
     """High-level service for LLM operations"""
     
-    def __init__(self, provider: LLMProvider):
+    def __init__(self, provider: LLMProvider, max_concurrent_requests: Optional[int] = None):
         """
         Initialize LLM service with a provider
         
         Args:
             provider: LLM provider implementation
+            max_concurrent_requests: Maximum concurrent API requests (defaults to settings)
         """
         self.provider = provider
         self.prompt_service = PromptService()
-        logger.debug(f"Initialized LLMService with provider: {provider.__class__.__name__}")
+        
+        # Semaphore for rate limiting
+        max_concurrent = max_concurrent_requests or getattr(
+            settings, 'llm_max_concurrent_requests', 10
+        )
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        
+        logger.debug(
+            f"Initialized LLMService with provider: {provider.__class__.__name__}, "
+            f"max_concurrent={max_concurrent}"
+        )
     
     async def get_agent_decision(
         self,
@@ -57,12 +70,15 @@ class LLMService:
             response_format = {"type": "json_object"}
         
         logger.debug(f"Getting agent decision for message: {user_message[:50]}...")
-        response_text = await self.provider.chat_completion(
-            messages=messages,
-            model=self.provider.get_default_model(),
-            temperature=0.5,
-            response_format=response_format
-        )
+        
+        # Rate limit with semaphore
+        async with self._semaphore:
+            response_text = await self.provider.chat_completion(
+                messages=messages,
+                model=self.provider.get_default_model(),
+                temperature=0.5,
+                response_format=response_format
+            )
         
         decision = json.loads(response_text)
         logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, module_id={decision.get('module_id')}")
@@ -100,11 +116,14 @@ class LLMService:
         ]
         
         logger.debug(f"Rewriting module content for message: {user_message[:50]}...")
-        content = await self.provider.chat_completion(
-            messages=messages,
-            model=self.provider.get_default_model(),
-            temperature=0.7
-        )
+        
+        # Rate limit with semaphore
+        async with self._semaphore:
+            content = await self.provider.chat_completion(
+                messages=messages,
+                model=self.provider.get_default_model(),
+                temperature=0.7
+            )
         
         logger.debug(f"Module content rewritten, length: {len(content)}")
         return content.strip()
@@ -134,11 +153,13 @@ class LLMService:
             {"role": "user", "content": prompt}
         ]
         
-        response = await self.provider.chat_completion(
-            messages=messages,
-            model=self.provider.get_default_model(),
-            temperature=0.7
-        )
+        # Rate limit with semaphore
+        async with self._semaphore:
+            response = await self.provider.chat_completion(
+                messages=messages,
+                model=self.provider.get_default_model(),
+                temperature=0.7
+            )
         
         return response.strip()
 

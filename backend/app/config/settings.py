@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     debug: bool = False
     # CORS
     cors_origins: list = ["http://localhost:3000"]
+    # LLM Rate Limiting
+    llm_max_concurrent_requests: int = 10  # Max concurrent API calls
     
     class Config:
         env_file = ".env"

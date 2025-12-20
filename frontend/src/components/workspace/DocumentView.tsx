@@ -1,17 +1,28 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Components } from "react-markdown";
 import { FileText, Plus, Sparkles, MessageSquare, Zap } from "lucide-react";
 import { Module } from "../../types";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { Button } from "../ui";
 import { useUpdateModule } from "../../hooks/useModules";
+import { fixMarkdownTables } from "../../utils/markdownUtils";
 
 interface DocumentViewProps {
   module: Module | null;
   onCreateModule?: () => void;
   hasModules?: boolean;
 }
+
+/**
+ * Cleans markdown content by fixing table formatting
+ * The LLM should output pure markdown, but we ensure tables are properly formatted
+ */
+const cleanMarkdownContent = (content: string): string => {
+  if (!content) return content;
+  return fixMarkdownTables(content);
+};
 
 export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModule, hasModules = false }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -140,8 +151,40 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModu
           <MarkdownEditor value={editContent} onChange={setEditContent} height="100%" />
         ) : (
           <div className="prose max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {module.content || "*No content yet*"}
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                table: ({ children }) => (
+                  <div className="overflow-x-auto my-4 -mx-4 px-4">
+                    <table className="min-w-full border-collapse border border-gray-300">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-gray-50">
+                    {children}
+                  </thead>
+                ),
+                tbody: ({ children }) => <tbody>{children}</tbody>,
+                tr: ({ children }) => (
+                  <tr className="border-b border-gray-300">
+                    {children}
+                  </tr>
+                ),
+                th: ({ children }) => (
+                  <th className="px-4 py-2 text-left font-semibold border-r border-gray-300 last:border-r-0">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-4 py-2 border-r border-gray-300 last:border-r-0">
+                    {children}
+                  </td>
+                ),
+              } as Components}
+            >
+              {cleanMarkdownContent(module.content || "*No content yet*")}
             </ReactMarkdown>
           </div>
         )}

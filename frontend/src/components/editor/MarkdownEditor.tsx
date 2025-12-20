@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -6,9 +6,14 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
+import Link from "@tiptap/extension-link";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
 import TurndownService from "turndown";
 import { marked } from "marked";
 import { Button } from "../ui";
+import { Input } from "../ui/input";
+import { fixMarkdownTables } from "../../utils/markdownUtils";
 import { 
   Bold, 
   Italic, 
@@ -19,8 +24,18 @@ import {
   Heading3,
   Quote,
   Code,
-  Table as TableIcon
+  Table as TableIcon,
+  Link as LinkIcon,
+  Strikethrough,
+  Minus,
+  CheckSquare
 } from "lucide-react";
+
+// Configure marked to support GitHub Flavored Markdown (GFM) including tables
+marked.setOptions({
+  gfm: true,
+  breaks: false,
+});
 
 interface MarkdownEditorProps {
   value: string;
@@ -32,6 +47,36 @@ interface MarkdownEditorProps {
 const turndownService = new TurndownService({
   headingStyle: "atx",
   codeBlockStyle: "fenced",
+});
+
+// Add task list support to Turndown
+turndownService.addRule("taskList", {
+  filter: function (node) {
+    return node.nodeName === "UL" && (
+      node.hasAttribute("data-type") && node.getAttribute("data-type") === "taskList"
+    );
+  },
+  replacement: function (content) {
+    return "\n" + content + "\n";
+  },
+});
+
+turndownService.addRule("taskItem", {
+  filter: function (node) {
+    return node.nodeName === "LI" && node.hasAttribute("data-type") && node.getAttribute("data-type") === "taskItem";
+  },
+  replacement: function (content, node) {
+    const input = node.querySelector('input[type="checkbox"]');
+    const checked = input && (input as HTMLInputElement).checked;
+    const prefix = checked ? "- [x]" : "- [ ]";
+    // Get text content, excluding the checkbox label
+    const textContent = Array.from(node.childNodes)
+      .filter((n) => n.nodeType === 3 || (n.nodeName !== "LABEL" && n.nodeName !== "INPUT"))
+      .map((n) => n.textContent || "")
+      .join("")
+      .trim();
+    return prefix + " " + textContent + "\n";
+  },
 });
 
 // Add table support to Turndown
@@ -68,7 +113,10 @@ turndownService.addRule("table", {
       rows.push("| " + cells.join(" | ") + " |");
     });
     
-    return "\n\n" + rows.join("\n") + "\n\n";
+    // Ensure proper spacing - tables need blank lines before and after
+    const tableMarkdown = rows.join("\n");
+    // Add extra newlines to ensure it's not treated as inline content
+    return "\n\n" + tableMarkdown + "\n\n";
   },
 });
 
@@ -77,6 +125,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   onChange,
   height = "100%",
 }) => {
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkText, setLinkText] = useState("");
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+
   const handleUpdate = useCallback((editor: any) => {
     // Convert HTML to Markdown
     const html = editor.getHTML();
@@ -90,9 +142,12 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       return "";
     }
     try {
-      return marked.parse(markdown) as string;
+      // Ensure tables are properly formatted before parsing
+      const processedMarkdown = fixMarkdownTables(markdown);
+      const html = marked.parse(processedMarkdown) as string;
+      return html;
     } catch (e) {
-      // Fallback to plain text if parsing fails
+      console.error('Markdown parsing error:', e);
       return markdown;
     }
   }, []);
@@ -103,6 +158,14 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         heading: {
           levels: [1, 2, 3],
         },
+        strike: {},
+        horizontalRule: {},
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-blue-600 underline cursor-pointer",
+        },
       }),
       Table.configure({
         resizable: true,
@@ -110,6 +173,17 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       TableRow,
       TableHeader,
       TableCell,
+      TaskList.configure({
+        HTMLAttributes: {
+          class: "contains-task-list",
+        },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: "task-list-item",
+        },
+      }),
       Placeholder.configure({
         placeholder: "Start writing...",
       }),
@@ -145,10 +219,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         } else {
           // Convert markdown to HTML for Tiptap
           try {
-            const html = marked.parse(value) as string;
+            const processedMarkdown = fixMarkdownTables(value);
+            const html = marked.parse(processedMarkdown) as string;
             editor.commands.setContent(html, false);
           } catch (e) {
-            // Fallback: set as plain text
+            console.error('Error converting markdown to HTML:', e);
             editor.commands.setContent(value, false);
           }
         }
@@ -156,12 +231,89 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }
   }, [value, editor]);
 
+  const handleSetLink = useCallback(() => {
+    if (!editor) return;
+    
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    
+    if (selectedText) {
+      setLinkText(selectedText);
+    }
+    
+    setShowLinkDialog(true);
+  }, [editor]);
+
+  const handleInsertLink = useCallback(() => {
+    if (!editor || !linkUrl) return;
+    
+    if (linkText) {
+      editor.chain().focus().insertContent(`<a href="${linkUrl}">${linkText}</a>`).run();
+    } else {
+      editor.chain().focus().setLink({ href: linkUrl }).run();
+    }
+    
+    setLinkUrl("");
+    setLinkText("");
+    setShowLinkDialog(false);
+  }, [editor, linkUrl, linkText]);
+
   if (!editor) {
     return null;
   }
 
   return (
-    <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-white">
+    <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-white relative">
+      {/* Link Dialog */}
+      {showLinkDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-lg shadow-lg min-w-[400px]">
+            <h3 className="text-lg font-semibold mb-4">Insert Link</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Link Text</label>
+                <Input
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  placeholder="Link text"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">URL</label>
+                <Input
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleInsertLink();
+                    } else if (e.key === "Escape") {
+                      setShowLinkDialog(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowLinkDialog(false);
+                  setLinkUrl("");
+                  setLinkText("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleInsertLink} disabled={!linkUrl}>
+                Insert
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Toolbar */}
       <div className="flex items-center gap-1 p-2 border-b bg-gray-50 flex-wrap">
         <Button
@@ -181,6 +333,24 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           title="Italic"
         >
           <Italic className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={editor.isActive("strike") ? "default" : "ghost"}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          className="h-8 w-8 p-0"
+          title="Strikethrough"
+        >
+          <Strikethrough className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={editor.isActive("code") ? "default" : "ghost"}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          className="h-8 w-8 p-0"
+          title="Inline Code"
+        >
+          <Code className="h-4 w-4" />
         </Button>
         <div className="w-px h-6 bg-gray-300 mx-1" />
         <Button
@@ -230,6 +400,15 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <ListOrdered className="h-4 w-4" />
         </Button>
         <Button
+          variant={editor.isActive("taskList") ? "default" : "ghost"}
+          size="sm"
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className="h-8 w-8 p-0"
+          title="Task List"
+        >
+          <CheckSquare className="h-4 w-4" />
+        </Button>
+        <Button
           variant={editor.isActive("blockquote") ? "default" : "ghost"}
           size="sm"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
@@ -246,6 +425,30 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           title="Code Block"
         >
           <Code className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={editor.isActive("link") ? "default" : "ghost"}
+          size="sm"
+          onClick={() => {
+            if (editor.isActive("link")) {
+              editor.chain().focus().unsetLink().run();
+            } else {
+              handleSetLink();
+            }
+          }}
+          className="h-8 w-8 p-0"
+          title="Insert Link"
+        >
+          <LinkIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          className="h-8 w-8 p-0"
+          title="Horizontal Rule"
+        >
+          <Minus className="h-4 w-4" />
         </Button>
         <div className="w-px h-6 bg-gray-300 mx-1" />
         <Button
