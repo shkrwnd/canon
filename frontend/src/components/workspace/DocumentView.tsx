@@ -156,6 +156,9 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                a: ({ node, ...props }) => (
+                  <a {...props} target="_blank" rel="noopener noreferrer" />
+                ),
                 table: ({ children }) => (
                   <div className="overflow-x-auto my-4 -mx-4 px-4">
                     <table className="min-w-full border-collapse border border-gray-300">

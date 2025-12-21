@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useChatMessages } from "../../hooks/useChat";
 import { agentAction } from "../../services/agentService";
 import { MessageRole, Project, Document } from "../../types";
@@ -152,7 +154,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       : "bg-gray-100 text-gray-900"
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                  <div className={`text-sm prose prose-sm max-w-none ${
+                    message.role === MessageRole.USER 
+                      ? "prose-invert [&_*]:text-white [&_strong]:font-bold [&_strong]:text-white [&_em]:text-white [&_code]:bg-blue-500 [&_code]:text-white [&_code]:px-1 [&_code]:rounded [&_pre]:bg-blue-500 [&_pre]:text-white [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-200 [&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4"
+                      : "[&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-gray-200 [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-600 [&_a]:underline"
+                  }`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                   <div
                     className={`text-xs mt-1 ${
                       message.role === MessageRole.USER ? "text-blue-100" : "text-gray-500"
@@ -176,7 +186,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       : "bg-gray-100 text-gray-900"
                   }`}
                 >
-                  <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                  <div className={`text-sm prose prose-sm max-w-none ${
+                    message.role === MessageRole.USER 
+                      ? "prose-invert [&_*]:text-white [&_strong]:font-bold [&_strong]:text-white [&_em]:text-white [&_code]:bg-blue-500 [&_code]:text-white [&_code]:px-1 [&_code]:rounded [&_pre]:bg-blue-500 [&_pre]:text-white [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-200 [&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4"
+                      : "[&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-gray-200 [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-600 [&_a]:underline"
+                  }`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                   <div
                     className={`text-xs mt-1 ${
                       message.role === MessageRole.USER ? "text-blue-100" : "text-gray-500"

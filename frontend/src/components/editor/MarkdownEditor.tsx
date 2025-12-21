@@ -37,6 +37,16 @@ marked.setOptions({
   breaks: false,
 });
 
+// Configure marked renderer to add target="_blank" to all links
+const renderer = new marked.Renderer();
+const originalLink = renderer.link.bind(renderer);
+renderer.link = (href: string, title: string | null, text: string) => {
+  const link = originalLink(href, title, text);
+  // Add target="_blank" and rel="noopener noreferrer" to links
+  return link.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
+};
+marked.setOptions({ renderer });
+
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -136,6 +146,21 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     onChange(markdown);
   }, [onChange]);
 
+  // Helper to ensure all links have target="_blank"
+  const ensureLinksOpenInNewTab = useCallback((html: string): string => {
+    // Use a temporary DOM element to parse and modify HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const links = tempDiv.querySelectorAll('a');
+    links.forEach((link) => {
+      if (!link.getAttribute('target')) {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+    return tempDiv.innerHTML;
+  }, []);
+
   // Convert markdown to HTML for initial content
   const getInitialContent = useCallback((markdown: string) => {
     if (!markdown || markdown.trim() === "") {
@@ -145,12 +170,13 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       // Ensure tables are properly formatted before parsing
       const processedMarkdown = fixMarkdownTables(markdown);
       const html = marked.parse(processedMarkdown) as string;
-      return html;
+      // Ensure all links open in new tab
+      return ensureLinksOpenInNewTab(html);
     } catch (e) {
       console.error('Markdown parsing error:', e);
       return markdown;
     }
-  }, []);
+  }, [ensureLinksOpenInNewTab]);
 
   const editor = useEditor({
     extensions: [
@@ -161,7 +187,19 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         strike: {},
         horizontalRule: {},
       }),
-      Link.configure({
+      Link.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            target: {
+              default: "_blank",
+            },
+            rel: {
+              default: "noopener noreferrer",
+            },
+          };
+        },
+      }).configure({
         openOnClick: false,
         HTMLAttributes: {
           class: "text-blue-600 underline cursor-pointer",
@@ -221,7 +259,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           try {
             const processedMarkdown = fixMarkdownTables(value);
             const html = marked.parse(processedMarkdown) as string;
-            editor.commands.setContent(html, false);
+            // Ensure all links open in new tab
+            const htmlWithTargets = ensureLinksOpenInNewTab(html);
+            editor.commands.setContent(htmlWithTargets, false);
           } catch (e) {
             console.error('Error converting markdown to HTML:', e);
             editor.commands.setContent(value, false);
@@ -248,9 +288,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     if (!editor || !linkUrl) return;
     
     if (linkText) {
-      editor.chain().focus().insertContent(`<a href="${linkUrl}">${linkText}</a>`).run();
+      editor.chain().focus().insertContent(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`).run();
     } else {
-      editor.chain().focus().setLink({ href: linkUrl }).run();
+      editor.chain().focus().setLink({ href: linkUrl, target: "_blank" }).run();
     }
     
     setLinkUrl("");

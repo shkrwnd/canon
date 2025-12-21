@@ -10,6 +10,7 @@ from opentelemetry import trace
 from .llm_service import LLMService
 from .chat_service import ChatService
 from .document_service import DocumentService
+from .document_validator import DocumentValidator, ValidationResult
 from ..clients import search_web
 import logging
 
@@ -132,10 +133,53 @@ class AgentService:
                             web_search_results=web_search_results
                         )
                         
+                        # Validate the rewritten content
+                        validation_result = DocumentValidator.validate_rewrite(
+                            new_content=new_content,
+                            original_content=target_document.content
+                        )
+                        
+                        # If validation fails, retry once
+                        if not validation_result.is_valid:
+                            logger.warning(
+                                f"Document rewrite validation failed: {validation_result.errors}. Retrying once..."
+                            )
+                            span.set_attribute("agent.validation_failed", True)
+                            span.set_attribute("agent.validation_errors", str(validation_result.errors))
+                            
+                            # Retry rewrite
+                            new_content = await self.llm_service.rewrite_document_content(
+                                user_message=user_message,
+                                standing_instruction=target_document.standing_instruction,
+                                current_content=target_document.content,
+                                web_search_results=web_search_results
+                            )
+                            
+                            # Validate again
+                            validation_result = DocumentValidator.validate_rewrite(
+                                new_content=new_content,
+                                original_content=target_document.content
+                            )
+                            
+                            if not validation_result.is_valid:
+                                # Still failing - surface error clearly
+                                error_msg = f"Document rewrite failed validation after retry: {', '.join(validation_result.errors)}"
+                                logger.error(error_msg)
+                                span.record_exception(Exception(error_msg))
+                                # Store validation errors in decision for user feedback
+                                decision['validation_errors'] = validation_result.errors
+                                decision['validation_warnings'] = validation_result.warnings
+                        
+                        # Log warnings even if validation passed
+                        if validation_result.warnings:
+                            logger.info(f"Document rewrite validation warnings: {validation_result.warnings}")
+                            decision['validation_warnings'] = validation_result.warnings
+                        
                         # Update document using repository
                         with tracer.start_as_current_span("agent.update_document") as db_span:
                             db_span.set_attribute("db.operation", "update_document")
                             db_span.set_attribute("db.document_id", target_document_id)
+                            db_span.set_attribute("db.validation_passed", validation_result.is_valid)
                             updated_document_obj = self.document_repo.update(
                                 target_document_id,
                                 content=new_content
@@ -239,19 +283,35 @@ class AgentService:
                     # Get initial content if provided in decision
                     initial_content = decision.get("document_content") or ""
                     
-                    # Perform web search if needed for document creation
-                    if decision.get("needs_web_search") and decision.get("search_query"):
-                        logger.info(f"Performing web search for document creation: {decision['search_query']}")
-                        with tracer.start_as_current_span("agent.web_search_for_create") as web_span:
-                            web_span.set_attribute("web_search.query", decision["search_query"])
-                            web_search_results_for_create = search_web(decision["search_query"])
-                            if web_search_results_for_create:
-                                initial_content = f"{initial_content}\n\n{web_search_results_for_create}" if initial_content else web_search_results_for_create
+                    # Validate document name and content before creation
+                    validation_result = DocumentValidator.validate_create(
+                        document_name=document_name,
+                        content=initial_content
+                    )
                     
-                    try:
-                        if self.document_service:
-                            # Note: create_document requires project_id as separate parameter
-                            created_document_obj = self.document_service.create_document(
+                    if not validation_result.is_valid:
+                        logger.warning(f"Document creation validation failed: {validation_result.errors}")
+                        decision['creation_error'] = {
+                            'type': 'validation',
+                            'message': f"Document creation validation failed: {', '.join(validation_result.errors)}"
+                        }
+                        # Don't proceed with creation if validation fails
+                        created_document = None
+                    else:
+                        # Validation passed - proceed with creation
+                        # Perform web search if needed for document creation
+                        if decision.get("needs_web_search") and decision.get("search_query"):
+                            logger.info(f"Performing web search for document creation: {decision['search_query']}")
+                            with tracer.start_as_current_span("agent.web_search_for_create") as web_span:
+                                web_span.set_attribute("web_search.query", decision["search_query"])
+                                web_search_results_for_create = search_web(decision["search_query"])
+                                if web_search_results_for_create:
+                                    initial_content = f"{initial_content}\n\n{web_search_results_for_create}" if initial_content else web_search_results_for_create
+                        
+                        try:
+                            if self.document_service:
+                                # Note: create_document requires project_id as separate parameter
+                                created_document_obj = self.document_service.create_document(
                                 user_id=user_id,
                                 project_id=project_id,
                                 document_data=DocumentCreate(
@@ -261,55 +321,55 @@ class AgentService:
                                     content=initial_content
                                 )
                             )
-                            created_document = {
-                                "id": created_document_obj.id,
-                                "name": created_document_obj.name,
-                                "standing_instruction": created_document_obj.standing_instruction,
-                                "content": created_document_obj.content,
-                                "project_id": created_document_obj.project_id,
-                                "user_id": created_document_obj.user_id,
-                                "created_at": created_document_obj.created_at,
-                                "updated_at": created_document_obj.updated_at
-                            }
-                            logger.info(f"Document {created_document_obj.id} created successfully")
-                            span.set_attribute("agent.document_created", True)
-                        else:
-                            logger.warning("DocumentService not available, cannot create document")
-                    except ValidationError as ve:
-                        # Handle validation errors (e.g., duplicate document name)
-                        error_message = str(ve)
-                        logger.warning(f"Document creation validation error: {error_message}")
-                        span.record_exception(ve)
-                        # Store error info for better user feedback
-                        created_document = None
-                        # Check if it's a duplicate name error
-                        if "already exists" in error_message.lower():
-                            # Try to find the existing document with this name
-                            existing_doc = None
-                            for doc in documents_list:
-                                if doc.get('name', '').lower() == document_name.lower():
-                                    existing_doc = doc
-                                    break
-                            # Store error context for response formatting
+                                created_document = {
+                                    "id": created_document_obj.id,
+                                    "name": created_document_obj.name,
+                                    "standing_instruction": created_document_obj.standing_instruction,
+                                    "content": created_document_obj.content,
+                                    "project_id": created_document_obj.project_id,
+                                    "user_id": created_document_obj.user_id,
+                                    "created_at": created_document_obj.created_at,
+                                    "updated_at": created_document_obj.updated_at
+                                }
+                                logger.info(f"Document {created_document_obj.id} created successfully")
+                                span.set_attribute("agent.document_created", True)
+                            else:
+                                logger.warning("DocumentService not available, cannot create document")
+                        except ValidationError as ve:
+                            # Handle validation errors (e.g., duplicate document name)
+                            error_message = str(ve)
+                            logger.warning(f"Document creation validation error: {error_message}")
+                            span.record_exception(ve)
+                            # Store error info for better user feedback
+                            created_document = None
+                            # Check if it's a duplicate name error
+                            if "already exists" in error_message.lower():
+                                # Try to find the existing document with this name
+                                existing_doc = None
+                                for doc in documents_list:
+                                    if doc.get('name', '').lower() == document_name.lower():
+                                        existing_doc = doc
+                                        break
+                                # Store error context for response formatting
+                                decision['creation_error'] = {
+                                    'type': 'duplicate_name',
+                                    'message': error_message,
+                                    'document_name': document_name,
+                                    'existing_document_id': existing_doc.get('id') if existing_doc else None
+                                }
+                            else:
+                                decision['creation_error'] = {
+                                    'type': 'validation',
+                                    'message': error_message
+                                }
+                        except Exception as e:
+                            logger.error(f"Error creating document: {e}")
+                            span.record_exception(e)
+                            created_document = None
                             decision['creation_error'] = {
-                                'type': 'duplicate_name',
-                                'message': error_message,
-                                'document_name': document_name,
-                                'existing_document_id': existing_doc.get('id') if existing_doc else None
+                                'type': 'unknown',
+                                'message': str(e)
                             }
-                        else:
-                            decision['creation_error'] = {
-                                'type': 'validation',
-                                'message': error_message
-                            }
-                    except Exception as e:
-                        logger.error(f"Error creating document: {e}")
-                        span.record_exception(e)
-                        created_document = None
-                        decision['creation_error'] = {
-                            'type': 'unknown',
-                            'message': str(e)
-                        }
                 
                 return {
                     "decision": decision,
@@ -508,21 +568,35 @@ class AgentService:
                         if intent_statement:
                             parts.append(f"\n\nOriginal intent: {intent_statement}")
                     else:
-                        # Other validation or unknown errors
-                        parts.append("I tried to create the document, but encountered an issue.")
+                        # Other validation or unknown errors - be specific
+                        error_type = creation_error.get('type', 'unknown')
+                        error_msg = creation_error.get('message', 'Unknown error')
                         
-                        if not decision.get("document_name"):
-                            parts.append("The document name wasn't specified. Please try again with a clearer request, like 'Create a document called Recipes'.")
-                        else:
-                            error_msg = creation_error.get('message', 'Unknown error')
-                            parts.append(f"I attempted to create a document called '{decision.get('document_name', 'Unknown')}', but it wasn't created successfully.")
-                            if error_msg and error_msg != 'Unknown error':
-                                parts.append(f"Error: {error_msg}")
+                        if error_type == 'validation':
+                            # Validation errors - show specific issues
+                            parts.append(f"I tried to create the document but validation found issues:")
+                            if 'validation failed' in error_msg.lower():
+                                # Extract specific errors from message
+                                parts.append(f"- {error_msg}")
                             else:
-                                parts.append("Please try again or check if a document with that name already exists.")
+                                parts.append(f"- {error_msg}")
+                            parts.append("\nPlease fix these issues and try again.")
+                        elif not decision.get("document_name"):
+                            # Missing document name
+                            parts.append("I cannot create a document without a name.")
+                            parts.append("Please specify a name, like 'Create a document called Recipes'.")
+                        else:
+                            # Unknown error - but still be specific
+                            document_name = decision.get('document_name', 'Unknown')
+                            parts.append(f"I attempted to create a document called '{document_name}', but it wasn't created successfully.")
+                            if error_msg and error_msg != 'Unknown error':
+                                parts.append(f"\n**Error:** {error_msg}")
+                                parts.append("\nPlease check the document name or try again with a different name.")
+                            else:
+                                parts.append("\nPlease try again or check if a document with that name already exists.")
                         
                         if intent_statement:
-                            parts.append(f"\n\nOriginal intent: {intent_statement}")
+                            parts.append(f"\n\n**Original intent:** {intent_statement}")
                     
                     agent_response_content = "\n".join(parts)
             
@@ -544,7 +618,12 @@ class AgentService:
                     # Fallback: if no content_summary provided, use change_summary
                     parts.append(f"\n\n**Changes:** {change_summary}")
                 
-                # Part 3: Web search note (if applicable)
+                # Part 3: Validation warnings (if any)
+                validation_warnings = decision.get("validation_warnings")
+                if validation_warnings:
+                    parts.append(f"\n\n**Note:** {', '.join(validation_warnings)}")
+                
+                # Part 4: Web search note (if applicable)
                 if result.get("web_search_performed"):
                     parts.append("\n\n_I performed a web search to ensure accuracy._")
                 
@@ -555,10 +634,25 @@ class AgentService:
                     agent_response_content = "I've updated the document content."
             
             elif should_edit:
-                # Edit was attempted but failed
-                agent_response_content = "I understood your request, but couldn't update the document."
-                if decision.get("reasoning"):
-                    agent_response_content += f" {decision['reasoning']}"
+                # Edit was attempted but failed - provide specific diagnostic
+                parts = []
+                
+                # Check for validation errors
+                validation_errors = decision.get("validation_errors")
+                if validation_errors:
+                    parts.append("I rewrote the document but validation found issues:")
+                    for error in validation_errors:
+                        parts.append(f"- {error}")
+                    parts.append("\nI can retry with fixes. Should I proceed?")
+                else:
+                    # Generic failure - but still be specific
+                    parts.append("I understood your request, but couldn't update the document.")
+                    if decision.get("reasoning"):
+                        parts.append(f"Reason: {decision['reasoning']}")
+                    else:
+                        parts.append("The document may not exist or there was an error. Please check the document ID or try again.")
+                
+                agent_response_content = "\n".join(parts)
             
             else:
                 # No edit - use conversational response if available, otherwise generate one
