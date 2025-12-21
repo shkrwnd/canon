@@ -71,9 +71,16 @@ class LLMService:
         # Add chat history if available (limit to last 10 messages for context)
         if chat_history:
             for msg in chat_history[-10:]:
+                role = msg.get("role", "user")
+                # Ensure role is a string (handle enum values)
+                if hasattr(role, 'value'):
+                    role = role.value
+                elif not isinstance(role, str):
+                    role = str(role).lower()
+                content = msg.get("content", "")
                 messages.append({
-                    "role": msg.get("role", "user"),
-                    "content": msg.get("content", "")
+                    "role": role,
+                    "content": content
                 })
         
         messages.append({"role": "user", "content": prompt})
@@ -178,7 +185,8 @@ class LLMService:
     async def generate_conversational_response(
         self,
         user_message: str,
-        context: str = ""
+        context: str = "",
+        chat_history: Optional[List[Dict]] = None
     ) -> str:
         """
         Generate a conversational response when no edit is needed
@@ -186,6 +194,7 @@ class LLMService:
         Args:
             user_message: User's message
             context: Optional context string
+            chat_history: Optional chat history for context
         
         Returns:
             Conversational response
@@ -196,9 +205,25 @@ class LLMService:
             {
                 "role": "system",
                 "content": "You are a helpful, friendly assistant that helps users manage their documents. Respond naturally and conversationally."
-            },
-            {"role": "user", "content": prompt}
+            }
         ]
+        
+        # Add chat history if available (limit to last 10 messages for context)
+        if chat_history:
+            for msg in chat_history[-10:]:
+                role = msg.get("role", "user")
+                # Ensure role is a string (handle enum values)
+                if hasattr(role, 'value'):
+                    role = role.value
+                elif not isinstance(role, str):
+                    role = str(role).lower()
+                content = msg.get("content", "")
+                messages.append({
+                    "role": role,
+                    "content": content
+                })
+        
+        messages.append({"role": "user", "content": prompt})
         
         model = self.provider.get_default_model()
         provider_name = self.provider.__class__.__name__

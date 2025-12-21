@@ -95,7 +95,8 @@ class AgentService:
                 decision = await self.llm_service.get_agent_decision(
                     user_message, 
                     documents_list, 
-                    project_context=project_context
+                    project_context=project_context,
+                    chat_history=chat_history
                 )
                 span.set_attribute("agent.decision.should_edit", decision.get("should_edit", False))
                 span.set_attribute("agent.decision.document_id", decision.get("document_id"))
@@ -428,7 +429,8 @@ class AgentService:
                     
                     agent_response_content = await self.llm_service.generate_conversational_response(
                         request.message,
-                        context
+                        context,
+                        chat_history=chat_history_for_llm
                     )
             
             # Store agent response

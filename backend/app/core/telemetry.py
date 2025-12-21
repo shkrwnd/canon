@@ -38,6 +38,11 @@ def setup_telemetry(app):
     Args:
         app: FastAPI application instance
     """
+    # Check if telemetry is enabled
+    if not getattr(settings, 'telemetry_enabled', True):
+        logger.info("OpenTelemetry instrumentation disabled (TELEMETRY_ENABLED=false)")
+        return None
+    
     # Create resource with service metadata
     resource = Resource.create({
         "service.name": "canon-api",
