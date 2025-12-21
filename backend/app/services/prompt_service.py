@@ -14,7 +14,43 @@ class PromptService:
         project_context: Optional[Dict] = None
     ) -> str:
         """Generate prompt for agent decision-making"""
-        documents_list = "\n".join([f"- {d['name']} (id: {d['id']})" for d in documents]) if documents else "No documents available"
+        # Build comprehensive document information with smart content inclusion
+        # This helps the LLM understand what's in each document to make better decisions
+        if documents:
+            documents_info = []
+            for d in documents:
+                content = d.get('content', '')
+                standing_instruction = d.get('standing_instruction', 'None')
+                doc_name = d['name']
+                doc_id = d['id']
+                
+                # Smart content inclusion strategy:
+                # - Small documents (≤2000 chars): include full content
+                # - Large documents: include beginning + end to show structure
+                # This balances context with token efficiency
+                if len(content) <= 2000:
+                    # Small document: include full content
+                    content_preview = content if content else '(empty document)'
+                    truncated = False
+                else:
+                    # Large document: include first 1500 chars (intro/overview) 
+                    # + last 500 chars (conclusion/recent content)
+                    # This shows structure without overwhelming the prompt
+                    content_preview = f"{content[:1500]}\n\n[... {len(content) - 2000} characters omitted ...]\n\n{content[-500:]}"
+                    truncated = True
+                
+                # Format document info with content, standing instruction, and metadata
+                doc_info = f"""Document: {doc_name} (id: {doc_id})
+Standing Instruction: {standing_instruction}
+Content:
+{content_preview}
+{f'[Note: Document is {len(content)} characters total - showing first 1500 and last 500 characters]' if truncated else ''}
+---"""
+                documents_info.append(doc_info)
+            
+            documents_list = "\n\n".join(documents_info)
+        else:
+            documents_list = "No documents available"
         
         project_info = ""
         if project_context:
@@ -81,11 +117,50 @@ NOT edit triggers (these are suggestions/questions, not commands):
 - Questions: "is there", "does it have", "what is"
 
 === DOCUMENT RESOLUTION ===
-- If user mentions a document by name, use that document's ID
-- Documents are referenced by name within the project (e.g., "Update the itinerary", "Edit the budget document")
-- If user says "this", "it", "the document" and there's clear context, resolve to the appropriate document
-- If user doesn't specify which document and edit is requested, set needs_clarification: true
-- Match document names flexibly (case-insensitive, partial matches)
+When deciding which document to edit or whether to create a new one:
+
+**CRITICAL: ALWAYS CHECK EXISTING DOCUMENTS FIRST**
+Before creating a new document, you MUST check if a document with the same or similar name already exists in the project.
+- Look at the PROJECT DOCUMENTS list below to see all existing document names
+- Use case-insensitive, partial matching (e.g., "Recipes" matches "recipes", "My Recipes", "Recipe Collection")
+- If a document with a matching name exists → set should_edit: true with that document_id, NOT should_create: true
+- Only set should_create: true if NO document with that name exists
+
+1. EXPLICIT NAME MENTION:
+   - User says "update the itinerary" → find document with name matching "itinerary"
+   - Use case-insensitive, partial matching
+   - **If found, set should_edit: true with that document_id**
+
+2. NAME-BASED CHECK (BEFORE CREATING):
+   - When user says "add X" or "create X", first infer the document name (e.g., "add recipes" → "Recipes")
+   - **Check the PROJECT DOCUMENTS list: does a document with this name already exist?**
+   - If YES → set should_edit: true with the existing document_id, NOT should_create: true
+   - If NO → proceed to content-based matching or creation
+   - Example: User says "Add my favorite recipes" → you infer "Recipes" → check if "Recipes" document exists → if yes, edit it; if no, create it
+
+3. CONTENT-BASED MATCHING (IMPORTANT):
+   - Analyze document content to determine relevance to user's request
+   - If user says "add hotels" and you see a Travel Itinerary document with travel content → edit that document
+   - If user says "add recipes" and you see a Recipes document → edit that document
+   - If content doesn't match any existing document's topic/purpose → create new document
+   - Use standing instructions to understand document scope and relevance
+
+4. CONTEXT-BASED RESOLUTION:
+   - User says "add it there" or "update it" → check conversation history for document reference
+   - User says "this", "it", "the document" → use document content to confirm if it's the right document
+   - Match document names flexibly (case-insensitive, partial matches)
+
+5. NEW DOCUMENT CREATION (ONLY IF NO MATCH FOUND):
+   - Create new document ONLY if:
+     a) You've checked the PROJECT DOCUMENTS list and NO document with that name exists
+     b) AND (user explicitly asks to create OR content doesn't match any existing document's topic/purpose)
+   - **Never create a document if one with the same/similar name already exists**
+
+6. CLARIFICATION NEEDED:
+   - Set needs_clarification: true if:
+     a) Multiple documents could match (ambiguous)
+     b) User's intent is unclear
+     c) Document name/content doesn't clearly indicate where content belongs
 
 === WEB SEARCH DECISION ===
 Search ONLY when necessary for accuracy:
@@ -112,7 +187,36 @@ For these actions, set pending_confirmation: true:
 
 Provide confirmation_prompt explaining what will happen and asking for approval.
 
-Available documents in this project:
+=== PROJECT DOCUMENTS ===
+Below are all documents in this project with their content (or preview for large documents). 
+**CRITICAL: You MUST check this list before creating any new document.**
+
+**STEP 1: CHECK DOCUMENT NAMES FIRST (BEFORE CREATING)**
+- When user requests to add/create content, infer the document name (e.g., "add recipes" → "Recipes")
+- **Check the document names in the list below: does a document with this name (or similar) already exist?**
+- Use case-insensitive, partial matching (e.g., "Recipes" matches "recipes", "My Recipes", "Recipe Collection")
+- **If a matching name exists → set should_edit: true with that document_id, NOT should_create: true**
+- **Only proceed to create if NO document with that name exists**
+
+**STEP 2: CONTENT-BASED RESOLUTION (if name doesn't match)**
+- Analyze document content to determine relevance to user's request
+- If user says "add hotels" and you see a Travel Itinerary document → edit that document
+- If user says "add recipes" and you see a Recipes document → edit that document
+- If content doesn't match any existing document → create new document
+
+**STEP 3: TOPIC MATCHING**
+- Match user's intent to document topics based on content, not just names
+- Example: "add budget info" → check if any document contains budget-related content
+- Example: "update travel plans" → find document with travel/itinerary content
+
+**STEP 4: STANDING INSTRUCTIONS**
+- Each document has a standing instruction that defines its purpose
+- Use standing instructions to understand document scope and relevance
+
+**STEP 5: DOCUMENT STRUCTURE**
+- For large documents, you see the beginning (overview) and end (recent content)
+- Use this to understand document structure and where new content should go
+
 {documents_list}
 
 Note: If this project has no documents yet, the list above will show "No documents available". In this case:
@@ -140,7 +244,8 @@ Current user message: "{user_message}"
     "search_query": string or null,
     "reasoning": string,
     "conversational_response": string or null,
-    "change_summary": string or null
+    "change_summary": string or null,
+    "content_summary": string or null  // Summary of actual content added/changed (for user to see in chat)
 }
 
 === FIELD RULES ===
@@ -150,20 +255,33 @@ should_edit:
 - Set false for questions, suggestions, feedback, greetings
 
 should_create:
-- Set true ONLY for explicit create requests ("create a new document", "make a new X")
+- Set true ONLY if:
+  a) User explicitly requests to create ("create a new document", "make a new X")
+  b) **AND you've checked the PROJECT DOCUMENTS list and NO document with that name exists**
+- **CRITICAL**: If a document with the same/similar name exists, set should_edit: true instead, NOT should_create: true
 - Set false otherwise
 - If true, MUST provide document_name
 
 document_id:
 - Provide only if should_edit is true AND you know which document
 - Resolve by name if mentioned (match against available documents list)
+- **When user says "add X" and a document named "X" exists, use that document_id**
 - Leave null if needs_clarification is true
 
 document_name:
-- Required if should_create is true
-- Extract from user message (e.g., "create a document called Recipes" → "Recipes")
-- If user doesn't specify name, suggest a descriptive name based on context
-- Examples: "Recipes", "Travel Guide", "Meeting Notes"
+- **REQUIRED if should_create is true** - MUST be provided, cannot be null
+- **BEFORE setting should_create: true, check if a document with this name already exists in PROJECT DOCUMENTS**
+- Extract from user message intelligently:
+  * "Add my favorite recipes" → document_name: "Recipes" (BUT check if "Recipes" exists first - if yes, set should_edit: true instead)
+  * "Create a new document for recipes" → document_name: "Recipes" (BUT check if "Recipes" exists first - if yes, set should_edit: true instead)
+  * "Add recipes" → document_name: "Recipes" (BUT check if "Recipes" exists first - if yes, set should_edit: true instead)
+  * "create a document called Recipes" → document_name: "Recipes" (BUT check if "Recipes" exists first - if yes, set should_edit: true instead)
+- If user says "add X" and no document exists for X, create document named after X
+- If user doesn't specify name explicitly, infer it from the topic/content they want to add
+- Capitalize properly (e.g., "recipes" → "Recipes", "travel guide" → "Travel Guide")
+- **CRITICAL**: Always provide document_name when should_create is true, even if you have to infer it from the user's message
+- **CRITICAL**: Never set should_create: true if a document with that name already exists - use should_edit: true instead
+- Examples: "Recipes", "Travel Guide", "Meeting Notes", "Budget", "Todo List"
 
 document_content:
 - Optional initial content for new document
@@ -200,11 +318,37 @@ conversational_response:
 change_summary:
 - Only if should_edit is true
 - Brief description of what will be changed (1-2 sentences, under 50 words)
+- Example: "Adding hotel recommendations with prices and locations"
+
+content_summary:
+- Only if should_edit is true OR should_create is true
+- A clear, readable summary of the ACTUAL content that was/will be added or changed
+- This will be shown to the user in the chat so they understand what's in the document
+- For edits: Summarize the new content sections, key points added, or changes made
+- For creates: Summarize the initial content that will be in the new document
+- Should be detailed enough for user to understand what's in the document (3-5 sentences, 100-200 words)
+- Format as natural prose, not bullet points
+- Focus on the NEW or CHANGED content, not the entire document
+- Example: "The document now includes a comprehensive hotel recommendations section with three hotels: The Grand Plaza (downtown, $150/night), Seaside Resort (beachfront, $200/night), and Budget Inn (near airport, $80/night). Each entry includes location, price, amenities, and booking information."
+
+=== CONTENT SUMMARY REQUIREMENT ===
+When you make changes to documents (should_edit: true) or create new documents (should_create: true), you MUST provide a content_summary that:
+1. Describes what content was added or changed in natural, readable prose
+2. Includes key details, facts, or information that was added
+3. Helps the user understand what's now in the document without reading the full content
+4. Is detailed enough (3-5 sentences, 100-200 words) but not overwhelming
+5. Focuses on the NEW or CHANGED content, not the entire document
+
+The content_summary will be shown to the user in the chat, so make it clear and informative.
 
 === EXAMPLES ===
 
 User: "Add hotel recommendations to the itinerary"
-→ should_edit: true, document_id: <itinerary_id>, intent_statement: "I'll add hotel recommendations to the Itinerary document", change_summary: "Adding hotel recommendations with prices"
+→ should_edit: true, 
+  document_id: <itinerary_id>, 
+  intent_statement: "I'll add hotel recommendations to the Itinerary document", 
+  change_summary: "Adding hotel recommendations with prices",
+  content_summary: "Added a new 'Hotels' section with three recommendations: The Grand Plaza (downtown, $150/night, 4-star), Seaside Resort (beachfront, $200/night, 5-star), and Budget Inn (near airport, $80/night, 3-star). Each entry includes location, price range, star rating, and key amenities like WiFi, breakfast, and parking availability."
 
 User: "What should I add to make it better?"
 → should_edit: false, conversational_response: "Based on your content, you might consider..."
@@ -221,11 +365,20 @@ User: "Hi!"
 User: "Summarize the itinerary document"
 → should_edit: false, conversational_response: "Here's a summary of your Itinerary document: [actual summary from content]"
 
+User: "Add my favorite recipes"
+→ **First check: Does a document named "Recipes" exist in PROJECT DOCUMENTS?**
+  - If YES → should_edit: true, document_id: <recipes_document_id>, intent_statement: "I'll add your favorite recipes to the existing Recipes document"
+  - If NO → should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' for your favorite recipes"
+
 User: "Create a new document for recipes"
-→ should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' in this project"
+→ **First check: Does a document named "Recipes" exist in PROJECT DOCUMENTS?**
+  - If YES → should_edit: true, document_id: <recipes_document_id>, intent_statement: "I'll update the existing Recipes document"
+  - If NO → should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' in this project"
 
 User: "Create a travel guide document"
-→ should_create: true, document_name: "Travel Guide", intent_statement: "I'll create a new document called 'Travel Guide' in this project"
+→ **First check: Does a document named "Travel Guide" exist in PROJECT DOCUMENTS?**
+  - If YES → should_edit: true, document_id: <travel_guide_document_id>, intent_statement: "I'll update the existing Travel Guide document"
+  - If NO → should_create: true, document_name: "Travel Guide", intent_statement: "I'll create a new document called 'Travel Guide' in this project"
 
 === CRITICAL RULES ===
 1. Default to CONVERSATION - assume user wants to talk unless explicitly requesting changes

@@ -166,21 +166,75 @@ class AgentService:
                 # Handle document creation if requested
                 created_document = None
                 if decision.get("should_create") and project_id:
-                    document_name = decision.get("document_name") or decision.get("intent_statement", "New Document")
-                    # Extract document name from intent_statement if not provided
-                    if not decision.get("document_name"):
-                        # Try to extract name from intent_statement or user message
+                    # Priority 1: Use document_name from decision (most reliable - LLM should provide this)
+                    document_name = decision.get("document_name")
+                    
+                    # Priority 2: Extract from intent_statement (more flexible than hardcoded keywords)
+                    if not document_name:
                         intent = decision.get("intent_statement", "")
-                        if "document" in intent.lower() or "called" in intent.lower():
-                            # Try to extract name from phrases like "create a document called X" or "new document for X"
-                            parts = intent.split()
-                            for i, part in enumerate(parts):
-                                if part.lower() in ["called", "named", "for"] and i + 1 < len(parts):
-                                    document_name = " ".join(parts[i+1:]).strip('"\'.,')
+                        if intent:
+                            intent_lower = intent.lower()
+                            
+                            # Pattern 1: "called X", "named X", "for X"
+                            if "called" in intent_lower or "named" in intent_lower or "for" in intent_lower:
+                                parts = intent.split()
+                                for i, part in enumerate(parts):
+                                    if part.lower() in ["called", "named", "for"] and i + 1 < len(parts):
+                                        document_name = " ".join(parts[i+1:]).strip('"\'.,')
+                                        # Remove common words like "document", "in", "this", "project"
+                                        document_name = document_name.replace("document", "").replace("in", "").replace("this", "").replace("project", "").strip()
+                                        if document_name:
+                                            logger.info(f"Extracted document name '{document_name}' from intent_statement")
+                                            break
+                            
+                            # Pattern 2: "create X" or "I'll create X"
+                            if not document_name:
+                                parts = intent.split()
+                                for i, part in enumerate(parts):
+                                    if part.lower() == "create" and i + 1 < len(parts):
+                                        # Take the next 1-3 words as potential document name
+                                        potential_name = " ".join(parts[i+1:i+4])
+                                        # Clean up common words
+                                        potential_name = potential_name.replace("document", "").replace("a", "").replace("new", "").replace("for", "").replace("in", "").replace("this", "").replace("project", "").strip()
+                                        if potential_name and len(potential_name) > 1:
+                                            document_name = potential_name
+                                            logger.info(f"Extracted document name '{document_name}' from intent_statement (create pattern)")
+                                            break
+                    
+                    # Priority 3: Extract from user message as last resort (simple noun extraction)
+                    # This is a fallback when LLM doesn't provide document_name or intent_statement extraction fails
+                    if not document_name:
+                        # Simple approach: look for nouns after action words
+                        user_words = user_message.split()
+                        action_words = ["add", "create", "make", "new", "my"]
+                        stop_words = ["my", "favorite", "the", "a", "an", "for", "to", "in", "with", "about"]
+                        
+                        for i, word in enumerate(user_words):
+                            word_lower = word.lower()
+                            # Look for action words or possessive patterns
+                            if word_lower in action_words and i + 1 < len(user_words):
+                                # Take the next 1-3 words as potential document name
+                                potential_name_words = []
+                                for j in range(i + 1, min(i + 4, len(user_words))):
+                                    next_word = user_words[j].lower()
+                                    # Stop if we hit another action word or common stop word
+                                    if next_word in action_words or next_word in stop_words:
+                                        break
+                                    potential_name_words.append(user_words[j])
+                                
+                                if potential_name_words:
+                                    document_name = " ".join(potential_name_words)
+                                    # Capitalize properly
+                                    document_name = " ".join([w.capitalize() for w in document_name.split()])
+                                    logger.info(f"Extracted document name '{document_name}' from user message")
                                     break
-                        if document_name == "New Document":
-                            # Fallback: use a default name based on project or user message
-                            document_name = f"Document {len(documents_list) + 1}"
+                    
+                    # Priority 4: Fallback to generic name
+                    if not document_name or document_name == "New Document":
+                        document_name = f"Document {len(documents_list) + 1}"
+                        logger.warning(f"Using fallback document name: {document_name}")
+                    
+                    logger.info(f"Creating document with name: '{document_name}'")
                     
                     # Get initial content if provided in decision
                     initial_content = decision.get("document_content") or ""
@@ -196,8 +250,10 @@ class AgentService:
                     
                     try:
                         if self.document_service:
+                            # Note: create_document requires project_id as separate parameter
                             created_document_obj = self.document_service.create_document(
                                 user_id=user_id,
+                                project_id=project_id,
                                 document_data=DocumentCreate(
                                     name=document_name,
                                     project_id=project_id,
@@ -219,10 +275,41 @@ class AgentService:
                             span.set_attribute("agent.document_created", True)
                         else:
                             logger.warning("DocumentService not available, cannot create document")
+                    except ValidationError as ve:
+                        # Handle validation errors (e.g., duplicate document name)
+                        error_message = str(ve)
+                        logger.warning(f"Document creation validation error: {error_message}")
+                        span.record_exception(ve)
+                        # Store error info for better user feedback
+                        created_document = None
+                        # Check if it's a duplicate name error
+                        if "already exists" in error_message.lower():
+                            # Try to find the existing document with this name
+                            existing_doc = None
+                            for doc in documents_list:
+                                if doc.get('name', '').lower() == document_name.lower():
+                                    existing_doc = doc
+                                    break
+                            # Store error context for response formatting
+                            decision['creation_error'] = {
+                                'type': 'duplicate_name',
+                                'message': error_message,
+                                'document_name': document_name,
+                                'existing_document_id': existing_doc.get('id') if existing_doc else None
+                            }
+                        else:
+                            decision['creation_error'] = {
+                                'type': 'validation',
+                                'message': error_message
+                            }
                     except Exception as e:
                         logger.error(f"Error creating document: {e}")
                         span.record_exception(e)
                         created_document = None
+                        decision['creation_error'] = {
+                            'type': 'unknown',
+                            'message': str(e)
+                        }
                 
                 return {
                     "decision": decision,
@@ -367,31 +454,103 @@ class AgentService:
                 agent_response_content = confirmation_prompt or "This action requires confirmation. Should I proceed?"
             
             elif should_create:
-                # Document creation requested
+                # Document creation requested - format response with action and content summary
                 if result.get("created_document"):
+                    # SUCCESS: Document was created
                     created_doc = result["created_document"]
                     parts = []
+                    
+                    # Part 1: Action summary (what was done) - use past tense
                     if intent_statement:
-                        parts.append(intent_statement)
-                    parts.append(f"I've created the document '{created_doc['name']}' in this project.")
+                        # Convert future tense to past tense for clarity
+                        intent = intent_statement.replace("I'll create", "I've created").replace("I will create", "I've created")
+                        parts.append(intent)
+                    else:
+                        parts.append(f"I've created the document '{created_doc['name']}' in this project.")
+                    
+                    # Part 2: Content summary (what's in the document)
+                    # This helps user understand what content was added without reading the full document
+                    content_summary = decision.get("content_summary")
+                    if content_summary:
+                        parts.append(f"\n\n**Document Content Summary:**\n{content_summary}")
+                    elif decision.get("document_content"):
+                        # Fallback: if no summary provided, show a preview of the content
+                        doc_content = decision.get("document_content", "")
+                        if doc_content:
+                            preview = doc_content[:200] + "..." if len(doc_content) > 200 else doc_content
+                            parts.append(f"\n\n**Initial Content Preview:**\n{preview}")
+                    
+                    # Part 3: Web search note (if applicable)
                     if result.get("web_search_performed"):
-                        parts.append("I performed a web search to gather initial content.")
-                    agent_response_content = " ".join(parts)
+                        parts.append("\n\n_I performed a web search to gather initial content._")
+                    
+                    # Join all parts with newlines for better readability
+                    agent_response_content = "\n".join(parts)
                 else:
-                    agent_response_content = intent_statement or "I'll create a new document for you, but encountered an issue. Please try again."
+                    # FAILURE: Document creation failed - provide helpful error message
+                    parts = []
+                    creation_error = decision.get('creation_error', {})
+                    error_type = creation_error.get('type', 'unknown')
+                    
+                    if error_type == 'duplicate_name':
+                        # Document with this name already exists - suggest editing instead
+                        existing_doc_id = creation_error.get('existing_document_id')
+                        document_name = creation_error.get('document_name', decision.get('document_name', 'Unknown'))
+                        
+                        parts.append(f"A document named '{document_name}' already exists in this project.")
+                        if existing_doc_id:
+                            parts.append(f"I can add this content to the existing document instead. Would you like me to update '{document_name}' with the new content?")
+                        else:
+                            parts.append("Would you like me to:")
+                        parts.append("1. Add this content to the existing document")
+                        parts.append("2. Create a new document with a different name")
+                        
+                        if intent_statement:
+                            parts.append(f"\n\nOriginal intent: {intent_statement}")
+                    else:
+                        # Other validation or unknown errors
+                        parts.append("I tried to create the document, but encountered an issue.")
+                        
+                        if not decision.get("document_name"):
+                            parts.append("The document name wasn't specified. Please try again with a clearer request, like 'Create a document called Recipes'.")
+                        else:
+                            error_msg = creation_error.get('message', 'Unknown error')
+                            parts.append(f"I attempted to create a document called '{decision.get('document_name', 'Unknown')}', but it wasn't created successfully.")
+                            if error_msg and error_msg != 'Unknown error':
+                                parts.append(f"Error: {error_msg}")
+                            else:
+                                parts.append("Please try again or check if a document with that name already exists.")
+                        
+                        if intent_statement:
+                            parts.append(f"\n\nOriginal intent: {intent_statement}")
+                    
+                    agent_response_content = "\n".join(parts)
             
             elif should_edit and result.get("updated_document"):
-                # Edit was successful - show what was done
+                # Edit was successful - format response with action summary and content summary
                 parts = []
+                
+                # Part 1: Action summary (what was done)
                 if intent_statement:
                     parts.append(intent_statement)
-                if change_summary:
-                    parts.append(f"**Changes made:** {change_summary}")
-                if result.get("web_search_performed"):
-                    parts.append("I performed a web search to ensure accuracy.")
                 
+                # Part 2: Content summary (what actually changed/added)
+                # This is the detailed summary of the content that was added or changed
+                # It helps the user understand what's now in the document
+                content_summary = decision.get("content_summary")
+                if content_summary:
+                    parts.append(f"\n\n**Content Summary:**\n{content_summary}")
+                elif change_summary:
+                    # Fallback: if no content_summary provided, use change_summary
+                    parts.append(f"\n\n**Changes:** {change_summary}")
+                
+                # Part 3: Web search note (if applicable)
+                if result.get("web_search_performed"):
+                    parts.append("\n\n_I performed a web search to ensure accuracy._")
+                
+                # Join all parts with newlines for better readability in chat
                 if parts:
-                    agent_response_content = " ".join(parts)
+                    agent_response_content = "\n".join(parts)
                 else:
                     agent_response_content = "I've updated the document content."
             
