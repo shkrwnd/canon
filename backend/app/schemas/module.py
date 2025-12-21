@@ -28,3 +28,4 @@ class Module(ModuleBase):
     class Config:
         from_attributes = True
 
+

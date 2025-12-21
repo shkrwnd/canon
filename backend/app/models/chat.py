@@ -15,13 +15,13 @@ class Chat(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    module_id = Column(Integer, ForeignKey("modules.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     owner = relationship("User", back_populates="chats")
-    module = relationship("Module", back_populates="chats")
+    project = relationship("Project", back_populates="chats")
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
 
 

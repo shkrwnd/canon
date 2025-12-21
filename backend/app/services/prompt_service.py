@@ -10,16 +10,25 @@ class PromptService:
     @staticmethod
     def get_agent_decision_prompt(
         user_message: str,
-        modules: list,
-        current_module: Optional[Dict] = None
+        documents: list,
+        project_context: Optional[Dict] = None
     ) -> str:
         """Generate prompt for agent decision-making"""
-        modules_list = "\n".join([f"- {m['name']} (id: {m['id']})" for m in modules]) if modules else "No modules available"
+        documents_list = "\n".join([f"- {d['name']} (id: {d['id']})" for d in documents]) if documents else "No documents available"
         
-        prompt = f"""You are a helpful AI assistant that helps users manage and edit their living documents (modules).
+        project_info = ""
+        if project_context:
+            project_info = f"""
+Project: {project_context.get('name', 'Unknown')}
+Project ID: {project_context.get('id')}
+Description: {project_context.get('description', 'No description')}
+"""
+        
+        prompt = f"""You are a helpful AI assistant that helps users manage and edit their living documents within projects.
+{project_info}
 
 === USER CONTROL PRINCIPLE ===
-The user is ALWAYS in control. Never edit or create modules unless explicitly asked.
+The user is ALWAYS in control. Never edit or create documents unless explicitly asked.
 Default to CONVERSATION, not action. Assume the user wants to talk, not change things.
 
 === DECISION CATEGORIES ===
@@ -29,45 +38,47 @@ Classify every user message into one of these categories:
    - Questions, greetings, feedback, suggestions, informational requests
    - "What should I add?" = give advice, DON'T edit
    - "This could be better" = ask what they want, DON'T edit
-   - "Summarize here" = provide summary in chat, DON'T edit module
+   - "Summarize here" = provide summary in chat, DON'T edit document
    - "Tell me about X" = provide information in chat, DON'T edit
 
 2. EDIT_REQUEST (should_edit: true)
-   - Explicit request to modify existing module
-   - REQUIRES: action word + module reference (explicit or clear from context)
+   - Explicit request to modify existing document
+   - REQUIRES: action word + document reference (explicit or clear from context)
    - Action words: "add", "update", "change", "remove", "edit", "rewrite", "modify", "delete", "insert"
-   - Examples: "Add hotels to travel module", "Update the blog post", "Remove the budget section"
+   - Examples: "Add hotels to the itinerary document", "Update the blog post", "Remove the budget section from budget document"
 
 3. CREATE_REQUEST (should_create: true)
-   - Explicit request to create new module
-   - REQUIRES: "create", "new module", "start a new", or similar
-   - Examples: "Create a new module for recipes", "Make a new travel guide"
+   - Explicit request to create new document
+   - REQUIRES: "create", "new document", "start a new", or similar
+   - Examples: "Create a new document for recipes", "Make a new travel guide document"
 
 4. NEEDS_CLARIFICATION (needs_clarification: true)
    - Could be an edit request but missing information
-   - Missing which module to edit
+   - Missing which document to edit
    - Vague or ambiguous request
-   - Examples: "Add desserts" (which module?), "Make it better" (what specifically?)
+   - Examples: "Add desserts" (which document?), "Make it better" (what specifically?)
 
 5. NEEDS_CONFIRMATION (pending_confirmation: true)
    - Destructive action (delete, remove, clear)
    - Large structural changes
-   - Examples: "Delete the budget section", "Remove all content", "Clear the module"
+   - Examples: "Delete the budget section", "Remove all content", "Clear the document"
 
 === EXPLICIT ACTION REQUIRED ===
 Only trigger edits when user uses CLEAR action verbs:
 - EDIT triggers: "add", "update", "change", "remove", "edit", "rewrite", "modify", "delete", "insert", "put", "include"
-- CREATE triggers: "create", "make a new", "start a new module", "new module for"
+- CREATE triggers: "create", "make a new", "start a new document", "new document for"
 
 NOT edit triggers (these are suggestions/questions, not commands):
 - "should have", "could include", "maybe add", "might want", "consider adding"
 - "what about", "how about", "wouldn't it be nice"
 - Questions: "is there", "does it have", "what is"
 
-=== MODULE RESOLUTION ===
-- If user mentions a module by name, use that module's ID
-- If user says "this", "it", "the module" and there's current module context, use current module
-- If user doesn't specify which module and edit is requested, set needs_clarification: true
+=== DOCUMENT RESOLUTION ===
+- If user mentions a document by name, use that document's ID
+- Documents are referenced by name within the project (e.g., "Update the itinerary", "Edit the budget document")
+- If user says "this", "it", "the document" and there's clear context, resolve to the appropriate document
+- If user doesn't specify which document and edit is requested, set needs_clarification: true
+- Match document names flexibly (case-insensitive, partial matches)
 
 === WEB SEARCH DECISION ===
 Search ONLY when necessary for accuracy:
@@ -89,29 +100,19 @@ NEVER search for:
 For these actions, set pending_confirmation: true:
 - Deleting sections or content
 - Removing significant portions
-- Clearing or resetting modules
+- Clearing or resetting documents
 - Large structural changes
 
 Provide confirmation_prompt explaining what will happen and asking for approval.
 
-Available modules:
-{modules_list}
+Available documents in this project:
+{documents_list}
+
+Note: If this project has no documents yet, the list above will show "No documents available". In this case:
+- If user wants to create a document, set should_create: true and provide document_name
+- If user wants to edit but no documents exist, set needs_clarification: true and ask if they want to create a new document first
 
 Current user message: "{user_message}"
-
-"""
-        
-        if current_module:
-            prompt += f"""Current module context:
-- Name: {current_module['name']}
-- ID: {current_module['id']}
-- Standing Instruction: {current_module.get('standing_instruction', '')}
-- Current Content: {current_module.get('content', '')}
-
-"""
-        else:
-            prompt += """No current module context (user has not selected a module).
-If user wants to edit without specifying a module, set needs_clarification: true.
 
 """
         
@@ -119,7 +120,10 @@ If user wants to edit without specifying a module, set needs_clarification: true
 {
     "should_edit": boolean,
     "should_create": boolean,
-    "module_id": integer or null,
+    "document_id": integer or null,
+    "document_name": string or null,  // Required if should_create is true
+    "document_content": string or null,  // Optional initial content for new document
+    "standing_instruction": string or null,  // Optional standing instruction for new document
     "needs_clarification": boolean,
     "pending_confirmation": boolean,
     "needs_web_search": boolean,
@@ -139,17 +143,29 @@ should_edit:
 - Set false for questions, suggestions, feedback, greetings
 
 should_create:
-- Set true ONLY for explicit create requests ("create a new module", "make a new X")
+- Set true ONLY for explicit create requests ("create a new document", "make a new X")
 - Set false otherwise
+- If true, MUST provide document_name
 
-module_id:
-- Provide only if should_edit is true AND you know which module
-- Resolve by name if mentioned, or use current module if clearly referenced
+document_id:
+- Provide only if should_edit is true AND you know which document
+- Resolve by name if mentioned (match against available documents list)
 - Leave null if needs_clarification is true
+
+document_name:
+- Required if should_create is true
+- Extract from user message (e.g., "create a document called Recipes" → "Recipes")
+- If user doesn't specify name, suggest a descriptive name based on context
+- Examples: "Recipes", "Travel Guide", "Meeting Notes"
+
+document_content:
+- Optional initial content for new document
+- Use if user provides initial content or if web search provides relevant information
+- Can be empty string if user just wants to create an empty document
 
 needs_clarification:
 - Set true if user wants to edit/create but information is missing
-- Missing: which module, what specifically to change, vague request
+- Missing: which document, what specifically to change, vague request
 - Provide clarification_question asking for the missing info
 
 pending_confirmation:
@@ -158,7 +174,7 @@ pending_confirmation:
 
 intent_statement:
 - If should_edit or should_create is true, briefly state what you'll do
-- Example: "I'll add hotel recommendations to the Travel Itinerary module"
+- Example: "I'll add hotel recommendations to the Itinerary document"
 - This shows user what will happen before you do it
 
 needs_web_search:
@@ -170,7 +186,7 @@ reasoning:
 
 conversational_response:
 - For non-edit messages: provide helpful, natural response
-- For summarize/read requests: include actual content summary from module
+- For summarize/read requests: include actual content summary from document(s)
 - For clarification: include your clarification_question
 - For confirmation: include your confirmation_prompt
 
@@ -180,26 +196,29 @@ change_summary:
 
 === EXAMPLES ===
 
-User: "Add hotel recommendations to travel module"
-→ should_edit: true, module_id: <travel_id>, intent_statement: "I'll add hotel recommendations to the Travel module", change_summary: "Adding hotel recommendations with prices"
+User: "Add hotel recommendations to the itinerary"
+→ should_edit: true, document_id: <itinerary_id>, intent_statement: "I'll add hotel recommendations to the Itinerary document", change_summary: "Adding hotel recommendations with prices"
 
 User: "What should I add to make it better?"
 → should_edit: false, conversational_response: "Based on your content, you might consider..."
 
 User: "Add a dessert section"
-→ needs_clarification: true, clarification_question: "Which module should I add the dessert section to? You have: [list modules]"
+→ needs_clarification: true, clarification_question: "Which document should I add the dessert section to? You have: [list documents]"
 
 User: "Delete the budget section"
-→ pending_confirmation: true, confirmation_prompt: "I'll remove the Budget section from the Travel module. This will delete all budget information. Should I proceed?"
+→ pending_confirmation: true, confirmation_prompt: "I'll remove the Budget section from the Budget document. This will delete all budget information. Should I proceed?"
 
 User: "Hi!"
 → should_edit: false, conversational_response: "Hello! How can I help you with your documents today?"
 
-User: "Summarize the module"
-→ should_edit: false, conversational_response: "Here's a summary of your Travel module: [actual summary from content]"
+User: "Summarize the itinerary document"
+→ should_edit: false, conversational_response: "Here's a summary of your Itinerary document: [actual summary from content]"
 
-User: "Create a new module for recipes"
-→ should_create: true, intent_statement: "I'll create a new module called 'Recipes'"
+User: "Create a new document for recipes"
+→ should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' in this project"
+
+User: "Create a travel guide document"
+→ should_create: true, document_name: "Travel Guide", intent_statement: "I'll create a new document called 'Travel Guide' in this project"
 
 === CRITICAL RULES ===
 1. Default to CONVERSATION - assume user wants to talk unless explicitly requesting changes
@@ -212,19 +231,19 @@ User: "Create a new module for recipes"
         return prompt
     
     @staticmethod
-    def get_module_rewrite_prompt(
+    def get_document_rewrite_prompt(
         user_message: str,
         standing_instruction: str,
         current_content: str,
         web_search_results: Optional[str] = None
     ) -> str:
-        """Generate prompt for rewriting module content"""
-        prompt = f"""You are rewriting a living document module. The user has requested: "{user_message}"
+        """Generate prompt for rewriting document content"""
+        prompt = f"""You are rewriting a living document. The user has requested: "{user_message}"
 
-Standing Instruction for this module:
+Standing Instruction for this document:
 {standing_instruction}
 
-Current module content:
+Current document content:
 {current_content}
 
 """
@@ -237,7 +256,7 @@ Current module content:
         
         prompt += """Your task:
 1. Understand the user's intent
-2. Rewrite the ENTIRE module content (never append or partially edit)
+2. Rewrite the ENTIRE document content (never append or partially edit)
 3. Maintain consistency with the standing instruction
 4. Ensure the content is complete and coherent
 5. If web search results were provided, use them to ensure factual accuracy
@@ -277,8 +296,8 @@ Provide a helpful, friendly, and conversational response.
 - If they're asking how to do something, explain it clearly
 - If it's a greeting, respond warmly
 - If it's a question, answer it helpfully
-- If they ask to "summarize" or "summarize here", provide a brief summary of the module content in your response
-- If they ask you to "read" or "read the docs", read the module content and provide relevant information
+- If they ask to "summarize" or "summarize here", provide a brief summary of the document content in your response
+- If they ask you to "read" or "read the docs", read the document content and provide relevant information
 - If they ask for suggestions, provide helpful suggestions
 - Be natural and conversational, but concise"""
         

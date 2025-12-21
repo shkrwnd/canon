@@ -1,6 +1,7 @@
-export interface Module {
+export interface Document {
   id: number;
   user_id: number;
+  project_id: number;
   name: string;
   standing_instruction: string;
   content: string;
@@ -8,15 +9,17 @@ export interface Module {
   updated_at: string;
 }
 
-export interface ModuleCreate {
+export interface DocumentCreate {
   name: string;
   standing_instruction?: string;
   content?: string;
+  project_id: number;
 }
 
-export interface ModuleUpdate {
+export interface DocumentUpdate {
   name?: string;
   standing_instruction?: string;
   content?: string;
 }
+
 

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getChats, getChatMessages, createChat, addChatMessage } from "../services/chatService";
+import { getChats, getChatMessages, createChat, addChatMessage, getChatByProject } from "../services/chatService";
 import { Chat, ChatCreate, ChatMessage, ChatMessageCreate } from "../types";
 
 export const useChats = () => {
@@ -35,6 +35,14 @@ export const useAddChatMessage = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["chatMessages", variables.chatId] });
     },
+  });
+};
+
+export const useChatByProject = (projectId: number | null) => {
+  return useQuery<Chat>({
+    queryKey: ["chat", "project", projectId],
+    queryFn: () => getChatByProject(projectId!),
+    enabled: projectId !== null,
   });
 };
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Button } from "./button";
-import { cn } from "../../utils/cn";
 
 interface DialogProps {
   open: boolean;

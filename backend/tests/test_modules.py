@@ -105,3 +105,4 @@ def test_delete_module(client, auth_token):
     get_response = client.get(f"/api/modules/{module_id}", headers=headers)
     assert get_response.status_code == status.HTTP_404_NOT_FOUND
 
+

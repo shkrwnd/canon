@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base
-from app.models import User, Module, Chat, ChatMessage
+from app.models import User, Project, Document, Chat, ChatMessage
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -15,8 +15,9 @@ import {
   HelpCircle
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
-import { useModules } from "../../hooks/useModules";
-import { Module } from "../../types";
+import { useProjects } from "../../hooks/useProjects";
+import { useDocuments } from "../../hooks/useDocuments";
+import { Project, Document } from "../../types";
 import { cn } from "../../utils/cn";
 import { Input } from "../ui";
 
@@ -24,7 +25,7 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
-  const { data: modules } = useModules();
+  const { data: projects } = useProjects();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -59,23 +60,25 @@ export const Header: React.FC = () => {
   const isWorkspace = location.pathname === "/workspace";
   const isProfile = location.pathname === "/profile";
 
-  // Filter modules based on search query with highlighting
-  const filteredModules = useMemo(() => {
-    if (!modules || !searchQuery.trim()) return [];
+  // Filter projects based on search query
+  // Note: For now, we'll only search projects. Document search can be added later
+  // when we have a better way to fetch all documents across projects
+  const filteredProjects = useMemo(() => {
+    if (!projects || !searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return modules.filter((module) =>
-      module.name.toLowerCase().includes(query) ||
-      module.content?.toLowerCase().includes(query)
+    return projects.filter((project) =>
+      project.name.toLowerCase().includes(query) ||
+      project.description?.toLowerCase().includes(query)
     );
-  }, [modules, searchQuery]);
+  }, [projects, searchQuery]);
 
-  // Get recent modules (last 5 accessed/modified)
-  const recentModules = useMemo(() => {
-    if (!modules) return [];
-    return [...modules]
+  // Get recent projects (last 5 accessed/modified)
+  const recentProjects = useMemo(() => {
+    if (!projects) return [];
+    return [...projects]
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       .slice(0, 5);
-  }, [modules]);
+  }, [projects]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -135,12 +138,15 @@ export const Header: React.FC = () => {
     }
   }, [searchOpen]);
 
-  const handleModuleSelect = (module: Module) => {
+  const handleProjectSelect = (project: Project) => {
     setSearchOpen(false);
     setSearchQuery("");
     navigate("/workspace");
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("selectModule", { detail: { moduleId: module.id } }));
+      // Select the project
+      window.dispatchEvent(new CustomEvent("selectProject", { 
+        detail: { projectId: project.id } 
+      }));
     }, 100);
   };
 
@@ -238,11 +244,11 @@ export const Header: React.FC = () => {
                   }
                 }}
                 className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm"
-                title="Search modules (⌘K)"
+                title="Search projects and documents (⌘K)"
               >
                 <Search className="w-4 h-4 text-gray-500" />
                 <span className="text-sm text-gray-500 min-w-[140px] text-left">
-                  {searchQuery || "Search modules..."}
+                  {searchQuery || "Search projects..."}
                 </span>
                 <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-gray-500 bg-gray-100 border border-gray-200 rounded">
                   <span className="text-xs">⌘</span>K
@@ -275,7 +281,7 @@ export const Header: React.FC = () => {
                       <Input
                         ref={searchInputRef}
                         type="text"
-                        placeholder="Search modules..."
+                        placeholder="Search projects and documents..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10 pr-10"
@@ -294,21 +300,21 @@ export const Header: React.FC = () => {
                   <div className="max-h-96 overflow-y-auto">
                     {searchQuery.trim() === "" ? (
                       <div>
-                        {recentModules.length > 0 && (
+                        {recentProjects.length > 0 && (
                           <div className="p-3 border-b border-gray-100 bg-gray-50">
                             <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
                               <Clock className="w-3.5 h-3.5" />
-                              Recent Modules
+                              Recent Projects
                             </div>
                             <div className="space-y-1">
-                              {recentModules.map((module) => (
+                              {recentProjects.map((project) => (
                                 <button
-                                  key={module.id}
-                                  onClick={() => handleModuleSelect(module)}
+                                  key={project.id}
+                                  onClick={() => handleProjectSelect(project)}
                                   className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-white rounded transition-colors"
                                 >
                                   <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="truncate">{module.name}</span>
+                                  <span className="truncate">{project.name}</span>
                                 </button>
                               ))}
                             </div>
@@ -316,52 +322,41 @@ export const Header: React.FC = () => {
                         )}
                         <div className="p-4 text-center">
                           <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Start typing to search modules...</p>
+                          <p className="text-sm text-gray-500">Start typing to search projects and documents...</p>
                           <p className="text-xs text-gray-400 mt-1">Press ⌘K to search anytime</p>
                         </div>
                       </div>
-                    ) : filteredModules.length === 0 ? (
+                    ) : filteredProjects.length === 0 ? (
                       <div className="p-8 text-center">
                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-gray-900 mb-1">No modules found</p>
+                        <p className="text-sm font-medium text-gray-900 mb-1">No projects found</p>
                         <p className="text-xs text-gray-500">
-                          No modules match "{searchQuery}"
+                          No projects match "{searchQuery}"
                         </p>
                       </div>
                     ) : (
                       <div className="py-2">
                         <div className="px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
-                          {filteredModules.length} {filteredModules.length === 1 ? "result" : "results"}
+                          {filteredProjects.length} {filteredProjects.length === 1 ? "result" : "results"}
                         </div>
-                        {filteredModules.map((module) => (
+                        {filteredProjects.map((project) => (
                           <button
-                            key={module.id}
-                            onClick={() => handleModuleSelect(module)}
+                            key={project.id}
+                            onClick={() => handleProjectSelect(project)}
                             className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 group"
                           >
                             <div className="flex-shrink-0 mt-0.5">
-                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center group-hover:from-blue-200 group-hover:to-blue-300 transition-colors">
-                                <FileText className="w-5 h-5 text-blue-600" />
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center group-hover:from-purple-200 group-hover:to-purple-300 transition-colors">
+                                <FileText className="w-5 h-5 text-purple-600" />
                               </div>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {highlightText(module.name, searchQuery)}
+                                {highlightText(project.name, searchQuery)}
                               </p>
                               <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                                {module.content
-                                  ? `${module.content.length} characters`
-                                  : "Empty module"}
+                                {project.description || "Project"}
                               </p>
-                              {module.content?.toLowerCase().includes(searchQuery.toLowerCase()) && (
-                                <p className="text-xs text-gray-400 mt-1 line-clamp-1">
-                                  {highlightText(
-                                    module.content.substring(0, 60),
-                                    searchQuery
-                                  )}
-                                  {module.content.length > 60 ? "..." : ""}
-                                </p>
-                              )}
                             </div>
                           </button>
                         ))}
@@ -369,7 +364,7 @@ export const Header: React.FC = () => {
                     )}
                   </div>
                   
-                  {searchQuery.trim() !== "" && filteredModules.length > 0 && (
+                  {searchQuery.trim() !== "" && filteredProjects.length > 0 && (
                     <div className="p-2 border-t border-gray-200 bg-gray-50">
                       <p className="text-xs text-gray-500 text-center">
                         Press <kbd className="px-1.5 py-0.5 bg-white border border-gray-200 rounded text-xs">Enter</kbd> to select first result

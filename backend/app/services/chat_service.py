@@ -25,15 +25,15 @@ class ChatService:
         return self.chat_repo.get_by_user_id(user_id)
     
     def create_chat(self, user_id: int, chat_data: ChatCreate) -> Chat:
-        """Create a new chat"""
-        logger.info(f"Creating chat for user {user_id}, module_id: {chat_data.module_id}")
+        """Create a new chat for a project"""
+        logger.info(f"Creating chat for user {user_id}, project_id: {chat_data.project_id}")
         with tracer.start_as_current_span("chat.create_chat") as span:
             span.set_attribute("chat.user_id", user_id)
-            span.set_attribute("chat.module_id", chat_data.module_id)
+            span.set_attribute("chat.project_id", chat_data.project_id)
             try:
                 chat = self.chat_repo.create(
                     user_id=user_id,
-                    module_id=chat_data.module_id,
+                    project_id=chat_data.project_id,
                     title=chat_data.title
                 )
                 self.chat_repo.commit()
@@ -55,6 +55,15 @@ class ChatService:
         if not chat:
             raise NotFoundError("Chat", str(chat_id))
         return chat
+    
+    def get_chat_by_project(self, user_id: int, project_id: int) -> Optional[Chat]:
+        """Get the chat for a project (returns most recent if multiple exist)"""
+        logger.debug(f"Getting chat for user {user_id}, project {project_id}")
+        chat = self.chat_repo.get_by_user_and_project(user_id, project_id)
+        if chat:
+            return chat
+        # If no chat found, return None (caller can create one if needed)
+        return None
     
     def get_chat_messages(self, user_id: int, chat_id: int) -> List[ChatMessage]:
         """Get all messages for a chat"""

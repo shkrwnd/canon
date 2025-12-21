@@ -16,13 +16,13 @@ async def agent_action(
     chat_service: ChatService = Depends(get_chat_service)
 ):
     """
-    Process agent action: detect intent, edit modules, perform web search.
+    Process agent action: detect intent, edit documents, perform web search.
     
     This endpoint handles the complete agent workflow including:
     - Chat management (creation/retrieval)
     - Message storage
     - Agent decision making
-    - Module updates
+    - Document updates
     - Response generation
     """
     return await agent_service.process_agent_action_with_chat(

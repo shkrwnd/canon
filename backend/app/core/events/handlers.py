@@ -10,9 +10,9 @@ Handlers for events published by services. These handle cross-cutting concerns:
 """
 from .bus import event_bus
 from .events import (
-    ModuleCreatedEvent,
-    ModuleUpdatedEvent,
-    ModuleDeletedEvent,
+    DocumentCreatedEvent,
+    DocumentUpdatedEvent,
+    DocumentDeletedEvent,
     AgentActionCompletedEvent,
 )
 import logging
@@ -20,30 +20,30 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def handle_module_created(event: ModuleCreatedEvent):
-    """Handle module created event"""
+def handle_document_created(event: DocumentCreatedEvent):
+    """Handle document created event"""
     logger.info(
-        f"Module created: '{event.module_name}' (id: {event.module_id}) "
-        f"by user {event.user_id} at {event.timestamp}"
+        f"Document created: '{event.document_name}' (id: {event.document_id}) "
+        f"in project {event.project_id} by user {event.user_id} at {event.timestamp}"
     )
     # Future: Send notification, create audit log, update analytics, etc.
 
 
-def handle_module_updated(event: ModuleUpdatedEvent):
-    """Handle module updated event"""
+def handle_document_updated(event: DocumentUpdatedEvent):
+    """Handle document updated event"""
     changed_fields = ", ".join(event.changes.keys())
     logger.info(
-        f"Module updated: {event.module_id} by user {event.user_id} "
+        f"Document updated: {event.document_id} in project {event.project_id} by user {event.user_id} "
         f"(changed: {changed_fields}) at {event.timestamp}"
     )
     # Future: Track changes, send notifications, update analytics, etc.
 
 
-def handle_module_deleted(event: ModuleDeletedEvent):
-    """Handle module deleted event"""
+def handle_document_deleted(event: DocumentDeletedEvent):
+    """Handle document deleted event"""
     logger.info(
-        f"Module deleted: '{event.module_name}' (id: {event.module_id}) "
-        f"by user {event.user_id} at {event.timestamp}"
+        f"Document deleted: '{event.document_name}' (id: {event.document_id}) "
+        f"from project {event.project_id} by user {event.user_id} at {event.timestamp}"
     )
     # Future: Create audit log, cleanup related data, etc.
 
@@ -52,16 +52,16 @@ def handle_agent_action_completed(event: AgentActionCompletedEvent):
     """Handle agent action completed event"""
     logger.info(
         f"Agent action completed: user {event.user_id}, chat {event.chat_id}, "
-        f"module {event.module_id}, success: {event.success} at {event.timestamp}"
+        f"project {event.project_id}, success: {event.success} at {event.timestamp}"
     )
     # Future: Analytics, monitoring, performance tracking, etc.
 
 
 def register_event_handlers():
     """Register all event handlers with the event bus"""
-    event_bus.subscribe(ModuleCreatedEvent, handle_module_created)
-    event_bus.subscribe(ModuleUpdatedEvent, handle_module_updated)
-    event_bus.subscribe(ModuleDeletedEvent, handle_module_deleted)
+    event_bus.subscribe(DocumentCreatedEvent, handle_document_created)
+    event_bus.subscribe(DocumentUpdatedEvent, handle_document_updated)
+    event_bus.subscribe(DocumentDeletedEvent, handle_document_deleted)
     event_bus.subscribe(AgentActionCompletedEvent, handle_agent_action_completed)
     logger.info("Event handlers registered successfully")
 

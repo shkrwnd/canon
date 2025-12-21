@@ -22,3 +22,4 @@ class Module(Base):
         {"sqlite_autoincrement": True},
     )
 
+

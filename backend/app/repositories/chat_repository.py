@@ -21,9 +21,16 @@ class ChatRepository(BaseRepository[Chat]):
             Chat.user_id == user_id
         ).first()
     
-    def get_by_module_id(self, module_id: int) -> List[Chat]:
-        """Get all chats for a module"""
-        return self.db.query(Chat).filter(Chat.module_id == module_id).all()
+    def get_by_project_id(self, project_id: int) -> List[Chat]:
+        """Get all chats for a project"""
+        return self.db.query(Chat).filter(Chat.project_id == project_id).all()
+    
+    def get_by_user_and_project(self, user_id: int, project_id: int) -> Optional[Chat]:
+        """Get a chat by user ID and project ID (typically one chat per project)"""
+        return self.db.query(Chat).filter(
+            Chat.user_id == user_id,
+            Chat.project_id == project_id
+        ).first()
     
     def get_messages_by_chat_id(self, chat_id: int) -> List[ChatMessage]:
         """Get all messages for a chat"""

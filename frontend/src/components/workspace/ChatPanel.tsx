@@ -2,22 +2,24 @@ import React, { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChatMessages } from "../../hooks/useChat";
 import { agentAction } from "../../services/agentService";
-import { MessageRole, Module } from "../../types";
+import { MessageRole, Project, Document } from "../../types";
 import { Button, Textarea, useToast } from "../ui";
 import { formatRelativeTime } from "../../utils/formatters";
 
 interface ChatPanelProps {
-  module: Module | null;
+  project: Project | null;
+  document: Document | null;
   chatId: number | null;
   onChatCreated?: (chatId: number) => void;
-  onModuleUpdated?: (module: Module) => void;
+  onDocumentUpdated?: (document: Document) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
-  module,
+  project,
+  document,
   chatId,
   onChatCreated,
-  onModuleUpdated,
+  onDocumentUpdated,
 }) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -44,7 +46,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   }, [messages, optimisticMessages]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !module || isSending) return;
+    if (!inputValue.trim() || !project || isSending) return;
 
     const userMessage = inputValue.trim();
     setInputValue("");
@@ -63,7 +65,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       // Send agent action
       const response = await agentAction({
         message: userMessage,
-        module_id: module.id,
+        project_id: project.id,
+        document_id: document?.id || undefined,
         chat_id: localChatId || undefined,
       });
 
@@ -78,9 +81,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         }
       }
 
-      // If module was updated, notify parent
-      if (response.module && onModuleUpdated) {
-        onModuleUpdated(response.module);
+      // If document was updated, notify parent
+      if (response.document && onDocumentUpdated) {
+        onDocumentUpdated(response.document);
       }
 
       // Clear optimistic messages - real messages will come from the API
@@ -91,10 +94,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         queryClient.invalidateQueries({ queryKey: ["chatMessages", finalChatId] });
       }
       
-      // Also invalidate modules to refresh the module list
-      queryClient.invalidateQueries({ queryKey: ["modules"] });
-      if (module.id) {
-        queryClient.invalidateQueries({ queryKey: ["module", module.id] });
+      // Also invalidate documents to refresh the document list
+      if (project.id) {
+        queryClient.invalidateQueries({ queryKey: ["documents", project.id] });
+      }
+      if (document?.id) {
+        queryClient.invalidateQueries({ queryKey: ["document", project.id, document.id] });
       }
     } catch (error: any) {
       // Remove optimistic message on error
@@ -107,10 +112,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
-  if (!module) {
+  if (!project) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
-        Select a module to start chatting
+        Select a project to start chatting
       </div>
     );
   }
@@ -119,9 +124,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     <div className="flex flex-col h-full border-l">
       <div className="p-4 border-b">
         <h3 className="font-semibold">Chat</h3>
-        <p className="text-sm text-gray-500">{module.name}</p>
+        <p className="text-sm text-gray-500">{project.name}</p>
+        {document && (
+          <p className="text-xs text-gray-400 mt-1">
+            Current document: {document.name}
+          </p>
+        )}
         <p className="text-xs text-gray-400 mt-1">
-          Tip: You can reference other modules by name (e.g., "update the Blog Post module")
+          Tip: You can reference documents by name (e.g., "update the Blog Post document")
         </p>
       </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">

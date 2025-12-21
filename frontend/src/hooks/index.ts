@@ -1,4 +1,5 @@
 export * from "./useAuth";
 export * from "./useChat";
-export * from "./useModules";
+export * from "./useProjects";
+export * from "./useDocuments";
 

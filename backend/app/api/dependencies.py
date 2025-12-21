@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from ..core.database import get_db
 from ..services import (
     AuthService,
-    ModuleService,
+    ProjectService,
+    DocumentService,
     ChatService,
     AgentService,
     LLMService
@@ -32,17 +33,30 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(db)
 
 
-def get_module_service(db: Session = Depends(get_db)) -> ModuleService:
+def get_project_service(db: Session = Depends(get_db)) -> ProjectService:
     """
-    Get ModuleService instance
+    Get ProjectService instance
     
     Args:
         db: Database session (injected by FastAPI)
     
     Returns:
-        ModuleService instance
+        ProjectService instance
     """
-    return ModuleService(db)
+    return ProjectService(db)
+
+
+def get_document_service(db: Session = Depends(get_db)) -> DocumentService:
+    """
+    Get DocumentService instance
+    
+    Args:
+        db: Database session (injected by FastAPI)
+    
+    Returns:
+        DocumentService instance
+    """
+    return DocumentService(db)
 
 
 def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
@@ -86,7 +100,8 @@ def get_llm_service() -> LLMService:
 
 def get_agent_service(
     db: Session = Depends(get_db),
-    llm_service: LLMService = Depends(get_llm_service)
+    llm_service: LLMService = Depends(get_llm_service),
+    document_service: DocumentService = Depends(get_document_service)
 ) -> AgentService:
     """
     Get AgentService instance with dependencies
@@ -94,9 +109,10 @@ def get_agent_service(
     Args:
         db: Database session (injected by FastAPI)
         llm_service: LLM service (injected by dependency)
+        document_service: Document service (injected by dependency)
     
     Returns:
         AgentService instance
     """
-    return AgentService(db, llm_service=llm_service)
+    return AgentService(db, llm_service=llm_service, document_service=document_service)
 

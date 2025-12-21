@@ -54,3 +54,4 @@ def test_login_invalid_credentials(client):
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+

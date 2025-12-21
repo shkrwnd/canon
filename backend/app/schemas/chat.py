@@ -5,7 +5,7 @@ from ..models.chat import MessageRole
 
 
 class ChatBase(BaseModel):
-    module_id: Optional[int] = None
+    project_id: int
     title: Optional[str] = None
 
 

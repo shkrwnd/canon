@@ -10,3 +10,4 @@ def format_datetime(dt: datetime) -> str:
     """Format datetime to ISO string"""
     return dt.isoformat() if dt else None
 
+

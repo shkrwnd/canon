@@ -3,16 +3,17 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { FileText, Plus, Sparkles, MessageSquare, Zap } from "lucide-react";
-import { Module } from "../../types";
+import { Document } from "../../types";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import { Button } from "../ui";
-import { useUpdateModule } from "../../hooks/useModules";
+import { useUpdateDocument } from "../../hooks/useDocuments";
 import { fixMarkdownTables } from "../../utils/markdownUtils";
 
 interface DocumentViewProps {
-  module: Module | null;
-  onCreateModule?: () => void;
-  hasModules?: boolean;
+  document: Document | null;
+  projectId: number | null;
+  onCreateDocument?: () => void;
+  hasDocuments?: boolean;
 }
 
 /**
@@ -24,34 +25,35 @@ const cleanMarkdownContent = (content: string): string => {
   return fixMarkdownTables(content);
 };
 
-export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModule, hasModules = false }) => {
+export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId, onCreateDocument, hasDocuments = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const updateModule = useUpdateModule();
+  const updateDocument = useUpdateDocument();
 
   React.useEffect(() => {
-    if (module) {
-      setEditContent(module.content);
+    if (document) {
+      setEditContent(document.content);
     }
-  }, [module]);
+  }, [document]);
 
   const handleSave = async () => {
-    if (!module) return;
-    await updateModule.mutateAsync({
-      id: module.id,
+    if (!document || !projectId) return;
+    await updateDocument.mutateAsync({
+      projectId,
+      documentId: document.id,
       data: { content: editContent },
     });
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    if (module) {
-      setEditContent(module.content);
+    if (document) {
+      setEditContent(document.content);
     }
     setIsEditing(false);
   };
 
-  if (!module) {
+  if (!document) {
     return (
       <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
         <div className="max-w-2xl mx-auto px-8 py-12 text-center">
@@ -68,20 +70,20 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModu
             Create your first living document to get started. Your documents evolve with AI assistance.
           </p>
 
-          {onCreateModule && (
+          {onCreateDocument && (
             <Button
-              onClick={onCreateModule}
+              onClick={onCreateDocument}
               size="lg"
               className="mb-8 shadow-lg hover:shadow-xl transition-shadow inline-flex items-center"
             >
               <Plus className="w-5 h-5 mr-2 flex-shrink-0" />
-              <span>Create Your First Module</span>
+              <span>Create Your First Document</span>
             </Button>
           )}
 
-          {hasModules && (
+          {hasDocuments && (
             <p className="text-sm text-gray-500 mb-8">
-              Or select a module from the sidebar to continue working
+              Or select a document from the sidebar to continue working
             </p>
           )}
 
@@ -130,14 +132,14 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModu
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-xl font-semibold">{module.name}</h2>
+        <h2 className="text-xl font-semibold">{document.name}</h2>
         {!isEditing ? (
           <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
             Edit
           </Button>
         ) : (
           <div className="flex gap-2">
-            <Button onClick={handleSave} size="sm" disabled={updateModule.isPending}>
+            <Button onClick={handleSave} size="sm" disabled={updateDocument.isPending}>
               Save
             </Button>
             <Button onClick={handleCancel} variant="outline" size="sm">
@@ -184,7 +186,7 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ module, onCreateModu
                 ),
               } as Components}
             >
-              {cleanMarkdownContent(module.content || "*No content yet*")}
+              {cleanMarkdownContent(document.content || "*No content yet*")}
             </ReactMarkdown>
           </div>
         )}

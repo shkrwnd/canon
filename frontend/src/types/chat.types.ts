@@ -1,9 +1,9 @@
-import { Module } from "./module.types";
+import { Document } from "./document.types";
 
 export interface Chat {
   id: number;
   user_id: number;
-  module_id: number | null;
+  project_id: number;
   title: string | null;
   created_at: string;
   updated_at: string;
@@ -24,7 +24,7 @@ export interface ChatMessage {
 }
 
 export interface ChatCreate {
-  module_id?: number | null;
+  project_id: number;
   title?: string | null;
 }
 
@@ -36,12 +36,13 @@ export interface ChatMessageCreate {
 
 export interface AgentActionRequest {
   message: string;
-  module_id?: number | null;
+  project_id: number;
+  document_id?: number | null;
   chat_id?: number | null;
 }
 
 export interface AgentActionResponse {
-  module: Module | null;
+  document: Document | null;
   chat_message: ChatMessage;
   agent_decision: Record<string, any>;
   web_search_performed: boolean;

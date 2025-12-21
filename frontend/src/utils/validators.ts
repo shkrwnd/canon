@@ -10,14 +10,19 @@ export const validatePassword = (password: string): { valid: boolean; error?: st
   return { valid: true };
 };
 
-export const validateModuleName = (name: string): { valid: boolean; error?: string } => {
+export const validateName = (name: string, entityType: string = "name"): { valid: boolean; error?: string } => {
   if (!name || name.trim().length === 0) {
-    return { valid: false, error: "Module name is required" };
+    return { valid: false, error: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} is required` };
   }
   if (name.length > 100) {
-    return { valid: false, error: "Module name must be less than 100 characters" };
+    return { valid: false, error: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} must be less than 100 characters` };
   }
   return { valid: true };
+};
+
+// Legacy alias for backward compatibility (can be removed later)
+export const validateModuleName = (name: string): { valid: boolean; error?: string } => {
+  return validateName(name, "name");
 };
 
 

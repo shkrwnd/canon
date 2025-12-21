@@ -28,6 +28,21 @@ def create_chat(
     return chat_service.create_chat(current_user.id, chat_data)
 
 
+@router.get("/project/{project_id}", response_model=ChatSchema)
+def get_chat_by_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    chat_service: ChatService = Depends(get_chat_service)
+):
+    """Get the chat for a project (creates one if it doesn't exist)"""
+    from ...schemas import ChatCreate
+    chat = chat_service.get_chat_by_project(current_user.id, project_id)
+    if not chat:
+        # Create a new chat if one doesn't exist
+        chat = chat_service.create_chat(current_user.id, ChatCreate(project_id=project_id))
+    return chat
+
+
 @router.get("/{chat_id}/messages", response_model=List[ChatMessageSchema])
 def get_chat_messages(
     chat_id: int,

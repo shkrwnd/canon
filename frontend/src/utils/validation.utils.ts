@@ -1,4 +1,4 @@
-import { validateEmail, validatePassword, validateModuleName } from "./validators";
+import { validateEmail, validatePassword, validateName } from "./validators";
 
 export const validateLoginForm = (email: string, password: string): { valid: boolean; errors: Record<string, string> } => {
   const errors: Record<string, string> = {};
@@ -39,17 +39,22 @@ export const validateRegisterForm = (email: string, password: string, confirmPas
   };
 };
 
-export const validateModuleForm = (name: string): { valid: boolean; errors: Record<string, string> } => {
+export const validateNameForm = (name: string, entityType: string = "name"): { valid: boolean; errors: Record<string, string> } => {
   const errors: Record<string, string> = {};
 
-  const nameValidation = validateModuleName(name);
+  const nameValidation = validateName(name, entityType);
   if (!nameValidation.valid) {
-    errors.name = nameValidation.error || "Module name is required";
+    errors.name = nameValidation.error || `${entityType} is required`;
   }
 
   return {
     valid: Object.keys(errors).length === 0,
     errors,
   };
+};
+
+// Legacy alias for backward compatibility (can be removed later)
+export const validateModuleForm = (name: string): { valid: boolean; errors: Record<string, string> } => {
+  return validateNameForm(name, "name");
 };
 

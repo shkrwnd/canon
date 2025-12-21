@@ -5,7 +5,7 @@ from .core.database import init_db
 from .core.logging_config import setup_logging
 from .core.events.handlers import register_event_handlers
 from .core.telemetry import setup_telemetry
-from .api.routes import auth, modules, chats, agent
+from .api.routes import auth, projects, documents, chats, agent
 from .api.exceptions import (
     canon_exception_handler,
     validation_exception_handler,
@@ -45,7 +45,8 @@ init_db()
 
 # Include routers
 app.include_router(auth.router, prefix="/api")
-app.include_router(modules.router, prefix="/api")
+app.include_router(projects.router, prefix="/api")
+app.include_router(documents.router, prefix="/api")
 app.include_router(chats.router, prefix="/api")
 app.include_router(agent.router, prefix="/api")
 

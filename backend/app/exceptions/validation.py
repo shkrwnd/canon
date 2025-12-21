@@ -11,3 +11,4 @@ class ValidationError(CanonException):
             status_code=status.HTTP_400_BAD_REQUEST
         )
 
+

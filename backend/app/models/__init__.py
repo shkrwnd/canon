@@ -1,10 +1,12 @@
 from .user import User
-from .module import Module
+from .project import Project
+from .document import Document
 from .chat import Chat, ChatMessage, MessageRole
 
 __all__ = [
     "User",
-    "Module",
+    "Project",
+    "Document",
     "Chat",
     "ChatMessage",
     "MessageRole",

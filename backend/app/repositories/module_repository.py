@@ -38,3 +38,4 @@ class ModuleRepository(BaseRepository[Module]):
             query = query.filter(Module.id != exclude_id)
         return query.first() is not None
 
+

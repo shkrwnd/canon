@@ -14,3 +14,4 @@ export const extractTitleFromMarkdown = (markdown: string): string => {
   return lines[0]?.trim() || "Untitled";
 };
 
+

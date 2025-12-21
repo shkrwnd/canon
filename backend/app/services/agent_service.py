@@ -1,14 +1,15 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
-from ..repositories import ModuleRepository, ChatRepository
-from ..models import Module, ChatMessage, MessageRole
-from ..schemas import AgentActionRequest, AgentActionResponse, ChatCreate, ChatMessageCreate, Module as ModuleSchema, ChatMessage as ChatMessageSchema
+from ..repositories import DocumentRepository, ProjectRepository, ChatRepository
+from ..models import Document, Project, ChatMessage, MessageRole
+from ..schemas import AgentActionRequest, AgentActionResponse, ChatCreate, ChatMessageCreate, Document as DocumentSchema, DocumentCreate, ChatMessage as ChatMessageSchema
 from ..exceptions import ValidationError
 from ..core.events import event_bus, AgentActionCompletedEvent
 from ..core.telemetry import get_tracer
 from opentelemetry import trace
 from .llm_service import LLMService
 from .chat_service import ChatService
+from .document_service import DocumentService
 from ..clients import search_web
 import logging
 
@@ -19,73 +20,85 @@ tracer = get_tracer(__name__)
 class AgentService:
     """Service for agent operations"""
     
-    def __init__(self, db: Session, llm_service: LLMService):
+    def __init__(self, db: Session, llm_service: LLMService, document_service: DocumentService = None):
         """
         Initialize agent service
         
         Args:
             db: Database session
             llm_service: LLM service (required, injected via dependency injection)
+            document_service: Document service (optional, for document creation)
         """
-        self.module_repo = ModuleRepository(db)
+        self.document_repo = DocumentRepository(db)
+        self.project_repo = ProjectRepository(db)
         self.chat_repo = ChatRepository(db)
         self.db = db
         self.llm_service = llm_service
+        self.document_service = document_service
     
     async def process_agent_action(
         self,
         user_id: int,
         user_message: str,
-        module_id: Optional[int] = None
+        project_id: Optional[int] = None,
+        document_id: Optional[int] = None,
+        chat_history: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
         Process agent action: detect intent, decide on edits, perform web search if needed,
-        and rewrite module content.
+        and rewrite document content.
         """
-        logger.info(f"Processing agent action for user {user_id}, module_id: {module_id}")
+        logger.info(f"Processing agent action for user {user_id}, project_id: {project_id}")
         
         with tracer.start_as_current_span("agent.process_agent_action") as span:
             span.set_attribute("agent.user_id", user_id)
-            span.set_attribute("agent.module_id", module_id)
+            span.set_attribute("agent.project_id", project_id)
             span.set_attribute("agent.message_length", len(user_message))
             
             try:
-                # Get all user modules
-                with tracer.start_as_current_span("agent.get_user_modules") as db_span:
-                    db_span.set_attribute("db.operation", "get_user_modules")
-                    user_modules = self.module_repo.get_by_user_id(user_id)
-                    db_span.set_attribute("db.result_count", len(user_modules))
-                modules_list = [
-                    {
-                        "id": m.id,
-                        "name": m.name,
-                        "standing_instruction": m.standing_instruction,
-                        "content": m.content
-                    }
-                    for m in user_modules
-                ]
+                # Get project and all documents in it
+                project = None
+                documents_list = []
                 
-                # Get current module if specified
-                current_module = None
-                if module_id:
-                    with tracer.start_as_current_span("agent.get_current_module") as db_span:
-                        db_span.set_attribute("db.operation", "get_current_module")
-                        module = self.module_repo.get_by_user_and_id(user_id, module_id)
-                        if module:
-                            current_module = {
-                                "id": module.id,
-                                "name": module.name,
-                                "standing_instruction": module.standing_instruction,
-                                "content": module.content
-                            }
-                            db_span.set_attribute("db.module_found", True)
+                if project_id:
+                    with tracer.start_as_current_span("agent.get_project") as db_span:
+                        db_span.set_attribute("db.operation", "get_project")
+                        project = self.project_repo.get_by_user_and_id(user_id, project_id)
+                        if project:
+                            db_span.set_attribute("db.project_found", True)
+                            span.set_attribute("agent.project_name", project.name)
                         else:
-                            db_span.set_attribute("db.module_found", False)
+                            db_span.set_attribute("db.project_found", False)
+                    
+                    if project:
+                        with tracer.start_as_current_span("agent.get_project_documents") as db_span:
+                            db_span.set_attribute("db.operation", "get_project_documents")
+                            project_documents = self.document_repo.get_by_project_id(project_id)
+                            db_span.set_attribute("db.result_count", len(project_documents))
+                        documents_list = [
+                            {
+                                "id": d.id,
+                                "name": d.name,
+                                "standing_instruction": d.standing_instruction,
+                                "content": d.content
+                            }
+                            for d in project_documents
+                        ]
                 
-                # Get agent decision
-                decision = await self.llm_service.get_agent_decision(user_message, modules_list, current_module)
+                # Get agent decision (pass project context)
+                project_context = {
+                    "id": project.id,
+                    "name": project.name,
+                    "description": project.description
+                } if project else None
+                
+                decision = await self.llm_service.get_agent_decision(
+                    user_message, 
+                    documents_list, 
+                    project_context=project_context
+                )
                 span.set_attribute("agent.decision.should_edit", decision.get("should_edit", False))
-                span.set_attribute("agent.decision.module_id", decision.get("module_id"))
+                span.set_attribute("agent.decision.document_id", decision.get("document_id"))
                 span.set_attribute("agent.decision.needs_web_search", decision.get("needs_web_search", False))
                 
                 web_search_performed = False
@@ -100,57 +113,120 @@ class AgentService:
                         web_search_performed = True
                         web_span.set_attribute("web_search.results_count", len(web_search_results) if web_search_results else 0)
                 
-                # Rewrite module if decision says so
-                updated_module = None
-                if decision.get("should_edit") and decision.get("module_id"):
-                    target_module_id = decision["module_id"]
-                    with tracer.start_as_current_span("agent.get_target_module") as db_span:
-                        db_span.set_attribute("db.operation", "get_target_module")
-                        target_module = self.module_repo.get_by_user_and_id(user_id, target_module_id)
+                # Rewrite document if decision says so
+                updated_document = None
+                if decision.get("should_edit") and decision.get("document_id"):
+                    target_document_id = decision["document_id"]
+                    with tracer.start_as_current_span("agent.get_target_document") as db_span:
+                        db_span.set_attribute("db.operation", "get_target_document")
+                        target_document = self.document_repo.get_by_user_and_id(user_id, target_document_id)
                     
-                    if target_module:
-                        logger.info(f"Rewriting module {target_module_id}")
-                        # Rewrite the entire module content
-                        new_content = await self.llm_service.rewrite_module_content(
+                    if target_document:
+                        logger.info(f"Rewriting document {target_document_id}")
+                        # Rewrite the entire document content
+                        new_content = await self.llm_service.rewrite_document_content(
                             user_message=user_message,
-                            standing_instruction=target_module.standing_instruction,
-                            current_content=target_module.content,
+                            standing_instruction=target_document.standing_instruction,
+                            current_content=target_document.content,
                             web_search_results=web_search_results
                         )
                         
-                        # Update module using repository
-                        with tracer.start_as_current_span("agent.update_module") as db_span:
-                            db_span.set_attribute("db.operation", "update_module")
-                            db_span.set_attribute("db.module_id", target_module_id)
-                            updated_module_obj = self.module_repo.update(
-                                target_module_id,
+                        # Update document using repository
+                        with tracer.start_as_current_span("agent.update_document") as db_span:
+                            db_span.set_attribute("db.operation", "update_document")
+                            db_span.set_attribute("db.document_id", target_document_id)
+                            updated_document_obj = self.document_repo.update(
+                                target_document_id,
                                 content=new_content
                             )
                             
-                            if updated_module_obj:
+                            if updated_document_obj:
                                 # Commit the transaction
-                                self.module_repo.commit()
-                                self.db.refresh(updated_module_obj)
+                                self.document_repo.commit()
+                                self.db.refresh(updated_document_obj)
                                 
-                                updated_module = {
-                                    "id": updated_module_obj.id,
-                                    "name": updated_module_obj.name,
-                                    "standing_instruction": updated_module_obj.standing_instruction,
-                                    "content": updated_module_obj.content,
-                                    "user_id": updated_module_obj.user_id,
-                                    "created_at": updated_module_obj.created_at,
-                                    "updated_at": updated_module_obj.updated_at
+                                updated_document = {
+                                    "id": updated_document_obj.id,
+                                    "name": updated_document_obj.name,
+                                    "standing_instruction": updated_document_obj.standing_instruction,
+                                    "content": updated_document_obj.content,
+                                    "project_id": updated_document_obj.project_id,
+                                    "user_id": updated_document_obj.user_id,
+                                    "created_at": updated_document_obj.created_at,
+                                    "updated_at": updated_document_obj.updated_at
                                 }
-                                logger.info(f"Module {target_module_id} updated successfully")
+                                logger.info(f"Document {target_document_id} updated successfully")
                                 db_span.set_attribute("db.update_success", True)
-                                span.set_attribute("agent.module_updated", True)
+                                span.set_attribute("agent.document_updated", True)
                             else:
                                 db_span.set_attribute("db.update_success", False)
-                                span.set_attribute("agent.module_updated", False)
+                                span.set_attribute("agent.document_updated", False)
+                
+                # Handle document creation if requested
+                created_document = None
+                if decision.get("should_create") and project_id:
+                    document_name = decision.get("document_name") or decision.get("intent_statement", "New Document")
+                    # Extract document name from intent_statement if not provided
+                    if not decision.get("document_name"):
+                        # Try to extract name from intent_statement or user message
+                        intent = decision.get("intent_statement", "")
+                        if "document" in intent.lower() or "called" in intent.lower():
+                            # Try to extract name from phrases like "create a document called X" or "new document for X"
+                            parts = intent.split()
+                            for i, part in enumerate(parts):
+                                if part.lower() in ["called", "named", "for"] and i + 1 < len(parts):
+                                    document_name = " ".join(parts[i+1:]).strip('"\'.,')
+                                    break
+                        if document_name == "New Document":
+                            # Fallback: use a default name based on project or user message
+                            document_name = f"Document {len(documents_list) + 1}"
+                    
+                    # Get initial content if provided in decision
+                    initial_content = decision.get("document_content") or ""
+                    
+                    # Perform web search if needed for document creation
+                    if decision.get("needs_web_search") and decision.get("search_query"):
+                        logger.info(f"Performing web search for document creation: {decision['search_query']}")
+                        with tracer.start_as_current_span("agent.web_search_for_create") as web_span:
+                            web_span.set_attribute("web_search.query", decision["search_query"])
+                            web_search_results_for_create = search_web(decision["search_query"])
+                            if web_search_results_for_create:
+                                initial_content = f"{initial_content}\n\n{web_search_results_for_create}" if initial_content else web_search_results_for_create
+                    
+                    try:
+                        if self.document_service:
+                            created_document_obj = self.document_service.create_document(
+                                user_id=user_id,
+                                document_data=DocumentCreate(
+                                    name=document_name,
+                                    project_id=project_id,
+                                    standing_instruction=decision.get("standing_instruction") or "",
+                                    content=initial_content
+                                )
+                            )
+                            created_document = {
+                                "id": created_document_obj.id,
+                                "name": created_document_obj.name,
+                                "standing_instruction": created_document_obj.standing_instruction,
+                                "content": created_document_obj.content,
+                                "project_id": created_document_obj.project_id,
+                                "user_id": created_document_obj.user_id,
+                                "created_at": created_document_obj.created_at,
+                                "updated_at": created_document_obj.updated_at
+                            }
+                            logger.info(f"Document {created_document_obj.id} created successfully")
+                            span.set_attribute("agent.document_created", True)
+                        else:
+                            logger.warning("DocumentService not available, cannot create document")
+                    except Exception as e:
+                        logger.error(f"Error creating document: {e}")
+                        span.record_exception(e)
+                        created_document = None
                 
                 return {
                     "decision": decision,
-                    "updated_module": updated_module,
+                    "updated_document": updated_document,
+                    "created_document": created_document,
                     "web_search_performed": web_search_performed,
                     "web_search_results": web_search_results if web_search_performed else None
                 }
@@ -158,7 +234,7 @@ class AgentService:
                 logger.error(f"Error processing agent action: {e}")
                 span.record_exception(e)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                self.module_repo.rollback()
+                self.document_repo.rollback()
                 raise
     
     async def process_agent_action_with_chat(
@@ -191,7 +267,7 @@ class AgentService:
         with tracer.start_as_current_span("agent.process_agent_action_with_chat") as span:
             span.set_attribute("agent.user_id", user_id)
             span.set_attribute("agent.chat_id", request.chat_id)
-            span.set_attribute("agent.module_id", request.module_id)
+            span.set_attribute("agent.project_id", request.project_id)
             span.set_attribute("agent.message_length", len(request.message))
             
             # Get or create chat
@@ -202,12 +278,12 @@ class AgentService:
                     try:
                         chat = chat_service.get_chat(user_id, request.chat_id)
                         chat_span.set_attribute("chat.found", True)
-                        # Validate that the chat belongs to the requested module (if module_id is provided)
-                        if request.module_id and chat.module_id != request.module_id:
-                            # Chat exists but belongs to a different module - create a new chat for this module
-                            logger.info(f"Chat {request.chat_id} belongs to different module, creating new chat")
+                        # Validate that the chat belongs to the requested project (if project_id is provided)
+                        if request.project_id and chat.project_id != request.project_id:
+                            # Chat exists but belongs to a different project - create a new chat for this project
+                            logger.info(f"Chat {request.chat_id} belongs to different project, creating new chat")
                             chat = None
-                            chat_span.set_attribute("chat.module_mismatch", True)
+                            chat_span.set_attribute("chat.project_mismatch", True)
                     except Exception as e:
                         logger.warning(f"Failed to get chat {request.chat_id}: {e}")
                         chat_span.set_attribute("chat.found", False)
@@ -215,18 +291,18 @@ class AgentService:
                         chat = None
             
             if not chat:
-                # Create new chat - use module_id from request
-                module_id_to_use = request.module_id
-                if not module_id_to_use:
-                    raise ValidationError("module_id is required to create a new chat")
+                # Create new chat - use project_id from request
+                project_id_to_use = request.project_id
+                if not project_id_to_use:
+                    raise ValidationError("project_id is required to create a new chat")
                 
-                logger.info(f"Creating new chat for user {user_id}, module_id: {module_id_to_use}")
+                logger.info(f"Creating new chat for user {user_id}, project_id: {project_id_to_use}")
                 with tracer.start_as_current_span("agent.create_chat") as chat_span:
                     chat_span.set_attribute("chat.operation", "create_chat")
-                    chat_span.set_attribute("chat.module_id", module_id_to_use)
+                    chat_span.set_attribute("chat.project_id", project_id_to_use)
                     chat = chat_service.create_chat(
                         user_id,
-                        ChatCreate(module_id=module_id_to_use)
+                        ChatCreate(project_id=project_id_to_use)
                     )
                     chat_span.set_attribute("chat.id", chat.id)
                     span.set_attribute("agent.chat_created", True)
@@ -251,11 +327,21 @@ class AgentService:
                 )
                 msg_span.set_attribute("message.id", user_message.id)
             
+            # Get chat history for context (excluding the message we just added)
+            chat_messages_db = chat_service.get_chat_messages(user_id, chat.id)
+            # Filter out the user message we just added to avoid duplication
+            chat_history_for_llm = [
+                {"role": msg.role.value if hasattr(msg.role, 'value') else msg.role, "content": msg.content}
+                for msg in chat_messages_db[:-1]  # Exclude the last message (the one we just added)
+            ]
+            
             # Process agent action
             result = await self.process_agent_action(
                 user_id=user_id,
                 user_message=request.message,
-                module_id=request.module_id or chat.module_id
+                project_id=request.project_id or chat.project_id,
+                document_id=request.document_id,
+                chat_history=chat_history_for_llm
             )
         
             # Prepare agent response message
@@ -280,11 +366,20 @@ class AgentService:
                 agent_response_content = confirmation_prompt or "This action requires confirmation. Should I proceed?"
             
             elif should_create:
-                # Module creation requested (not implemented yet, but prepared)
-                agent_response_content = intent_statement or "I'll create a new module for you."
-                # TODO: Implement module creation flow
+                # Document creation requested
+                if result.get("created_document"):
+                    created_doc = result["created_document"]
+                    parts = []
+                    if intent_statement:
+                        parts.append(intent_statement)
+                    parts.append(f"I've created the document '{created_doc['name']}' in this project.")
+                    if result.get("web_search_performed"):
+                        parts.append("I performed a web search to gather initial content.")
+                    agent_response_content = " ".join(parts)
+                else:
+                    agent_response_content = intent_statement or "I'll create a new document for you, but encountered an issue. Please try again."
             
-            elif should_edit and result.get("updated_module"):
+            elif should_edit and result.get("updated_document"):
                 # Edit was successful - show what was done
                 parts = []
                 if intent_statement:
@@ -297,11 +392,11 @@ class AgentService:
                 if parts:
                     agent_response_content = " ".join(parts)
                 else:
-                    agent_response_content = "I've updated the module content."
+                    agent_response_content = "I've updated the document content."
             
             elif should_edit:
                 # Edit was attempted but failed
-                agent_response_content = "I understood your request, but couldn't update the module."
+                agent_response_content = "I understood your request, but couldn't update the document."
                 if decision.get("reasoning"):
                     agent_response_content += f" {decision['reasoning']}"
             
@@ -313,19 +408,23 @@ class AgentService:
                     # Generate a conversational response for questions/general conversation
                     logger.debug("Generating conversational response")
                     
-                    # If we have a current module and user is asking to summarize/read, pass module content
-                    current_module_content = None
-                    module_id_to_check = request.module_id or chat.module_id
-                    if module_id_to_check:
-                        module = self.module_repo.get_by_user_and_id(user_id, module_id_to_check)
-                        if module:
-                            current_module_content = module.content
+                    # Get project documents for context if user is asking about content
+                    project_id_to_check = request.project_id or chat.project_id
+                    project_documents_content = None
+                    if project_id_to_check:
+                        project_documents = self.document_repo.get_by_project_id(project_id_to_check)
+                        if project_documents:
+                            # Include document names and brief content summaries
+                            project_documents_content = "\n\n".join([
+                                f"Document: {d.name}\nContent: {d.content[:500]}..." if len(d.content) > 500 else f"Document: {d.name}\nContent: {d.content}"
+                                for d in project_documents
+                            ])
                     
-                    # Build context with module content if available and user is asking for info
+                    # Build context with document content if available and user is asking for info
                     context = result.get("decision", {}).get("reasoning", "")
                     user_message_lower = request.message.lower()
-                    if current_module_content and any(keyword in user_message_lower for keyword in ["summarize", "read", "tell me about", "what's in", "show me", "describe"]):
-                        context = f"Module content:\n{current_module_content}\n\n{context if context else 'User is asking about the module content.'}"
+                    if project_documents_content and any(keyword in user_message_lower for keyword in ["summarize", "read", "tell me about", "what's in", "show me", "describe"]):
+                        context = f"Project documents:\n{project_documents_content}\n\n{context if context else 'User is asking about the project documents.'}"
                     
                     agent_response_content = await self.llm_service.generate_conversational_response(
                         request.message,
@@ -346,7 +445,7 @@ class AgentService:
                         metadata={
                             "decision": result["decision"],
                             "web_search_performed": result.get("web_search_performed", False),
-                            "module_updated": result.get("updated_module") is not None,
+                            "document_updated": result.get("updated_document") is not None,
                             "needs_clarification": needs_clarification,
                             "pending_confirmation": pending_confirmation,
                             "should_create": should_create
@@ -355,33 +454,37 @@ class AgentService:
                 )
                 msg_span.set_attribute("message.id", agent_message.id)
             
-            # Convert updated module to schema if exists
-            updated_module_schema = None
-            if result.get("updated_module"):
-                updated_module_schema = ModuleSchema(**result["updated_module"])
+            # Convert updated or created document to schema if exists
+            updated_document_schema = None
+            if result.get("updated_document"):
+                updated_document_schema = DocumentSchema(**result["updated_document"])
+            elif result.get("created_document"):
+                updated_document_schema = DocumentSchema(**result["created_document"])
             
             # Publish event for cross-cutting concerns (analytics, monitoring)
             event_bus.publish(AgentActionCompletedEvent(
                 user_id=user_id,
                 chat_id=chat.id,
-                module_id=request.module_id or chat.module_id,
+                project_id=request.project_id or chat.project_id,
+                document_id=request.document_id or (result.get("updated_document", {}).get("id") if result.get("updated_document") else None) or (result.get("created_document", {}).get("id") if result.get("created_document") else None),
                 action_type="agent_action",
-                success=result.get("updated_module") is not None,
+                success=result.get("updated_document") is not None or result.get("created_document") is not None,
                 metadata={
                     "should_edit": should_edit,
                     "should_create": should_create,
                     "needs_clarification": needs_clarification,
                     "pending_confirmation": pending_confirmation,
                     "web_search_performed": result.get("web_search_performed", False),
-                    "module_updated": result.get("updated_module") is not None
+                    "document_updated": result.get("updated_document") is not None,
+                    "document_created": result.get("created_document") is not None
                 }
             ))
             
-            span.set_attribute("agent.success", result.get("updated_module") is not None)
+            span.set_attribute("agent.success", result.get("updated_document") is not None or result.get("created_document") is not None)
             
             # Build and return response
             return AgentActionResponse(
-                module=updated_module_schema,
+                document=updated_document_schema,
                 chat_message=ChatMessageSchema.model_validate(agent_message),
                 agent_decision=result["decision"],
                 web_search_performed=result.get("web_search_performed", False)

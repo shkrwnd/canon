@@ -1,28 +1,31 @@
 import React from "react";
 import { ResizablePanel } from "./ResizablePanel";
 import { ChatPanel } from "./ChatPanel";
-import { Module } from "../../types";
+import { Project, Document } from "../../types";
 
 interface RightSidebarProps {
-  module: Module | null;
+  project: Project | null;
+  document: Document | null;
   chatId: number | null;
   onChatCreated: (chatId: number) => void;
-  onModuleUpdated: (module: Module) => void;
+  onDocumentUpdated: (document: Document) => void;
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({
-  module,
+  project,
+  document,
   chatId,
   onChatCreated,
-  onModuleUpdated,
+  onDocumentUpdated,
 }) => {
   return (
     <ResizablePanel side="right" initialWidth={320} minWidth={200} maxWidth={600}>
       <ChatPanel
-        module={module}
+        project={project}
+        document={document}
         chatId={chatId}
         onChatCreated={onChatCreated}
-        onModuleUpdated={onModuleUpdated}
+        onDocumentUpdated={onDocumentUpdated}
       />
     </ResizablePanel>
   );

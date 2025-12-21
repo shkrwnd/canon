@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from ..clients.llm_providers.base import LLMProvider
 from .prompt_service import PromptService
 from ..core.telemetry import get_tracer
@@ -39,23 +39,25 @@ class LLMService:
     async def get_agent_decision(
         self,
         user_message: str,
-        modules: list,
-        current_module: Optional[Dict] = None
+        documents: list,
+        project_context: Optional[Dict] = None,
+        chat_history: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
         Get agent decision on what to do
         
         Args:
             user_message: User's message
-            modules: List of user's modules
-            current_module: Optional current module context
+            documents: List of documents in the project
+            project_context: Optional project context (id, name, description)
+            chat_history: Optional chat history for context
         
         Returns:
-            Decision dict with should_edit, module_id, needs_web_search, etc.
+            Decision dict with should_edit, document_id, needs_web_search, etc.
         """
         # Generate prompt (business logic)
         prompt = self.prompt_service.get_agent_decision_prompt(
-            user_message, modules, current_module
+            user_message, documents, project_context
         )
         
         # Make API call (provider-specific)
@@ -63,9 +65,18 @@ class LLMService:
             {
                 "role": "system",
                 "content": "You are a helpful assistant that helps users manage documents. You can have conversations and make decisions about editing. Always respond with valid JSON."
-            },
-            {"role": "user", "content": prompt}
+            }
         ]
+        
+        # Add chat history if available (limit to last 10 messages for context)
+        if chat_history:
+            for msg in chat_history[-10:]:
+                messages.append({
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", "")
+                })
+        
+        messages.append({"role": "user", "content": prompt})
         
         response_format = None
         if self.provider.supports_json_mode():
@@ -99,11 +110,11 @@ class LLMService:
             
             decision = json.loads(response_text)
             span.set_attribute("llm.decision.should_edit", decision.get('should_edit', False))
-            span.set_attribute("llm.decision.module_id", decision.get('module_id'))
-            logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, module_id={decision.get('module_id')}")
+            span.set_attribute("llm.decision.document_id", decision.get('document_id'))
+            logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, document_id={decision.get('document_id')}")
             return decision
     
-    async def rewrite_module_content(
+    async def rewrite_document_content(
         self,
         user_message: str,
         standing_instruction: str,
@@ -111,18 +122,18 @@ class LLMService:
         web_search_results: Optional[str] = None
     ) -> str:
         """
-        Rewrite module content based on user intent
+        Rewrite document content based on user intent
         
         Args:
             user_message: User's edit request
-            standing_instruction: Module's standing instruction
-            current_content: Current module content
+            standing_instruction: Document's standing instruction
+            current_content: Current document content
             web_search_results: Optional web search results
         
         Returns:
-            New module content
+            New document content
         """
-        prompt = self.prompt_service.get_module_rewrite_prompt(
+        prompt = self.prompt_service.get_document_rewrite_prompt(
             user_message, standing_instruction, current_content, web_search_results
         )
         
@@ -134,14 +145,14 @@ class LLMService:
             {"role": "user", "content": prompt}
         ]
         
-        logger.debug(f"Rewriting module content for message: {user_message[:50]}...")
+        logger.debug(f"Rewriting document content for message: {user_message[:50]}...")
         
         model = self.provider.get_default_model()
         provider_name = self.provider.__class__.__name__
         
         # Create custom span for LLM operation
-        with tracer.start_as_current_span("llm.rewrite_module_content") as span:
-            span.set_attribute("llm.operation", "rewrite_module_content")
+        with tracer.start_as_current_span("llm.rewrite_document_content") as span:
+            span.set_attribute("llm.operation", "rewrite_document_content")
             span.set_attribute("llm.model", model)
             span.set_attribute("llm.provider", provider_name)
             span.set_attribute("llm.temperature", 0.7)

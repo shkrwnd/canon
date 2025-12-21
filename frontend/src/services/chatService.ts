@@ -12,6 +12,11 @@ export const createChat = async (data: ChatCreate): Promise<Chat> => {
   return response.data;
 };
 
+export const getChatByProject = async (projectId: number): Promise<Chat> => {
+  const response = await apiClient.get<Chat>(API_ENDPOINTS.CHATS.GET_BY_PROJECT(projectId));
+  return response.data;
+};
+
 export const getChatMessages = async (chatId: number): Promise<ChatMessage[]> => {
   const response = await apiClient.get<ChatMessage[]>(API_ENDPOINTS.CHATS.GET_MESSAGES(chatId));
   return response.data;
