@@ -148,7 +148,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 className={`flex ${message.role === MessageRole.USER ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg p-3 ${
+                  className={`${message.role === MessageRole.USER ? "max-w-[80%]" : "w-full"} rounded-lg p-3 ${
                     message.role === MessageRole.USER
                       ? "bg-blue-600 text-white"
                       : "bg-gray-100 text-gray-900"
@@ -180,7 +180,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 className={`flex ${message.role === MessageRole.USER ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg p-3 ${
+                  className={`${message.role === MessageRole.USER ? "max-w-[80%]" : "w-full"} rounded-lg p-3 ${
                     message.role === MessageRole.USER
                       ? "bg-blue-600 text-white"
                       : "bg-gray-100 text-gray-900"
@@ -207,8 +207,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             ))}
             {/* Show loading indicator when waiting for bot response */}
             {isSending && optimisticMessages.length > 0 && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-lg p-3 bg-gray-100 text-gray-900">
+              <div className="flex justify-center">
+                <div className="rounded-lg p-3 bg-gray-100 text-gray-900">
                   <div className="flex items-center space-x-2">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
