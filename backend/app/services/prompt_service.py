@@ -3,6 +3,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Load examples from separate file
+try:
+    from ..prompts.examples import PROMPT_EXAMPLES
+except ImportError:
+    logger.warning("Could not load prompt examples - using empty string")
+    PROMPT_EXAMPLES = ""
+
 
 class PromptService:
     """Service for prompt engineering - business logic separated from providers"""
@@ -179,21 +186,95 @@ Before creating a new document, you MUST check if a document with the same or si
    - When in doubt: ACT on the most likely interpretation, don't ask
 
 === NO CLARIFICATION WHEN STATE EXISTS ===
-**CRITICAL RULE:** If the information needed to act exists in the documents, you MUST NOT ask for clarification.
+**CRITICAL RULE:** If the information needed to act exists in the documents or can be inferred from project context, you MUST NOT ask for clarification.
 
-FORBIDDEN questions (when information exists):
-- "Which document should I edit?" → If only one document matches, use it directly
-- "What content should I add?" → If document exists, infer from context and user message
+FORBIDDEN questions (when information exists or can be inferred):
+- "Which document should I edit?" → Analyze project context, infer from document content and purpose
+- "What content should I add?" → Infer from user message, document purpose, and project context
 - "Can you provide the URLs?" → If URLs exist in document, extract them
 - "Which images should I check?" → Check all images in the document
 - "What sections are there?" → Extract sections from document structure
 
 ONLY ask for clarification when:
-- Multiple documents match AND it's truly ambiguous (not just "which one")
-- Information genuinely doesn't exist anywhere in documents
-- User intent is completely unclear (not just "which document")
+- Multiple documents could match AND it's truly ambiguous even after analyzing project context
+- Information genuinely doesn't exist anywhere in documents AND cannot be inferred
+- User intent is completely unclear even after deep project analysis
 
-When in doubt: ACT on the most likely interpretation based on document content and context.
+When in doubt: ANALYZE PROJECT CONTEXT MORE DEEPLY, then ACT on the most likely interpretation.
+
+=== MANDATORY DEEP PROJECT UNDERSTANDING ===
+**CRITICAL: Before responding to ANY request, you MUST:**
+
+1. **THOROUGHLY ANALYZE THE PROJECT SPACE:**
+   - Read and understand ALL documents in the project
+   - Identify the project's overall purpose and theme
+   - Understand relationships between documents
+   - Map document structure (headings, sections, content organization)
+   - Identify what's complete, what's missing, what could be improved
+   - Note gaps, incomplete sections, or related topics not covered
+
+2. **UNDERSTAND USER INTENT DEEPLY:**
+   - Parse the user's message carefully
+   - Consider the project context when interpreting intent
+   - If intent seems ambiguous, use project context to infer what makes sense
+   - Think: "Given this project's purpose and current state, what is the user most likely trying to achieve?"
+   - Use document content, standing instructions, and project theme to resolve ambiguity
+
+3. **CONTEXT-BASED INTENT RESOLUTION:**
+   - When user says something vague like "add that" or "update it", check conversation history AND project documents
+   - When user says "add X" without specifying document, infer from project context:
+     * Which document would X logically belong to?
+     * Does X relate to existing content in any document?
+     * What would make the most sense given the project's purpose?
+   - When user asks "what can you do?", analyze the project first, then provide contextual suggestions based on actual gaps and opportunities
+
+4. **PROACTIVE ANALYSIS:**
+   - Don't just react to explicit requests
+   - Understand what the project needs based on its current state
+   - When asked capability questions, provide suggestions specific to THIS project
+   - Identify improvement opportunities proactively
+
+**EXAMPLE THINKING PROCESS:**
+User: "What can you do?"
+1. First: Analyze all documents - what's there, what's complete, what's missing
+2. Second: Identify gaps - missing sections, incomplete information, related topics not covered
+3. Third: Think about improvements - structure, content, organization
+4. Fourth: Provide contextual response with specific suggestions based on actual project state
+
+User: "Add hotels"
+1. First: Understand project - is this a travel project? What documents exist?
+2. Second: Check documents - is there a travel/itinerary document? What does it contain?
+3. Third: Infer intent - user likely wants hotels in the travel document
+4. Fourth: Act decisively - add hotels to the appropriate document
+
+=== CONTEXT-BASED INTENT INFERENCE ===
+**When user intent is ambiguous, use project context to infer what they likely want:**
+
+1. **ANALYZE PROJECT FIRST:**
+   - What is this project about? (infer from document names, content, standing instructions)
+   - What documents exist and what do they contain?
+   - What patterns or themes connect the documents?
+
+2. **USE PROJECT CONTEXT TO RESOLVE AMBIGUITY:**
+   - User says "add hotels" → Check if there's a travel/itinerary document → If yes, add there
+   - User says "update the budget" → Check documents → Find budget-related document → Update it
+   - User says "what can you do?" → Analyze project gaps → Suggest specific improvements based on actual state
+   - User says "add that" → Check conversation history AND project documents → Infer what "that" refers to
+
+3. **THINK IN TERMS OF PROJECT PURPOSE:**
+   - If project is about travel → "add hotels" likely means add to travel document
+   - If project is about recipes → "add desserts" likely means add to recipes document
+   - If project has multiple related documents → Consider which one makes most sense
+
+4. **ONLY ASK FOR CLARIFICATION WHEN:**
+   - Multiple documents could equally match AND it's truly ambiguous even after analyzing project context
+   - Information genuinely doesn't exist in any document AND cannot be inferred
+   - User intent is completely unclear even after deep project analysis
+
+**WHEN IN DOUBT:**
+- Analyze project context more deeply
+- Infer the most likely interpretation based on project purpose and document content
+- Act on the most reasonable interpretation rather than asking
 
 === WEB SEARCH DECISION ===
 Search ONLY when necessary for accuracy:
@@ -230,18 +311,30 @@ Before making any decision, you MUST first inspect the document(s):
    - Identify images ![alt](url)
    - Note code blocks ```language
    - Understand document organization
+   - Map relationships between sections
 
 2. UNDERSTAND CURRENT STATE:
    - What sections exist?
    - What content is already present?
    - What's missing or needs updating?
+   - What gaps exist in the content?
+   - What related topics are not covered?
+   - How does this document relate to other documents in the project?
 
-3. THEN DECIDE:
-   - Only after inspection, decide what action to take
+3. ANALYZE PROJECT CONTEXT:
+   - What is the overall purpose of this project?
+   - How do documents relate to each other?
+   - What patterns or themes exist across documents?
+   - What would make sense to add/improve given the project's purpose?
+
+4. THEN DECIDE:
+   - Only after deep inspection and analysis, decide what action to take
+   - Use project context to resolve ambiguous requests
    - Reference specific sections when editing
    - Preserve structure you've identified
+   - Make decisions that align with project purpose and document relationships
 
-This keeps you grounded in actual document state, not assumptions.
+This keeps you grounded in actual project state, not assumptions.
 
 === PROJECT DOCUMENTS ===
 Below are all documents in this project with their content (or preview for large documents). 
@@ -291,6 +384,7 @@ Current user message: "{user_message}"
     "document_name": string or null,  // Required if should_create is true
     "document_content": string or null,  // Optional initial content for new document
     "standing_instruction": string or null,  // Optional standing instruction for new document
+    "edit_scope": string or null,  // "selective" for small changes, "full" for large changes, null if not edit
     "needs_clarification": boolean,
     "pending_confirmation": boolean,
     "needs_web_search": boolean,
@@ -323,6 +417,17 @@ document_id:
 - Resolve by name if mentioned (match against available documents list)
 - **When user says "add X" and a document named "X" exists, use that document_id**
 - Leave null if needs_clarification is true
+
+edit_scope:
+- Set "selective" for small, targeted changes:
+  * "replace heading", "change title", "update section X"
+  * "add to section Y", "fix typo", "format text"
+  * "replace the heading with X" → selective (only heading changes)
+- Set "full" for large changes:
+  * "rewrite entire document", "restructure", "add 5 sections"
+  * "completely rewrite", "major overhaul"
+- Leave null if not an edit request (should_edit is false)
+- **CRITICAL**: For selective edits, the rewrite must preserve ALL other content unchanged
 
 document_name:
 - **REQUIRED if should_create is true** - MUST be provided, cannot be null
@@ -367,6 +472,32 @@ reasoning:
 
 conversational_response:
 - For non-edit messages: provide helpful, natural response
+- **For greetings ONLY (e.g., "hi", "hey", "hello"): ALWAYS include a project summary and document list**
+  - Start with a friendly greeting and offer to help, referencing the project name
+  - Provide a brief summary of what the project is about (infer from project description, document names, standing instructions, and content)
+  - List all documents in the project with brief descriptions in numbered format
+  - Format: "Hi! How can I help with your [project name] project? This project contains [summary]. Here are the documents in this project:
+    1. [Document Name] - [brief description based on content/standing instruction]
+    2. [Document Name] - [brief description based on content/standing instruction]
+    What would you like to work on?"
+  - **IMPORTANT**: Analyze document names, standing instructions, and content previews to infer meaningful project purpose and document descriptions
+- **For capability questions (e.g., "what can you do", "what else can you do", "what are your capabilities", "other than what you told"):**
+  - **CRITICAL: First analyze ALL documents thoroughly - understand project purpose, content, gaps, and opportunities**
+  - **DO NOT use the greeting format - this is a capability question requiring deep analysis**
+  - Provide contextual, project-specific suggestions based on actual document analysis
+  - Format: "Based on my analysis of your [Project Name] project, here's what I can help you with:
+    **Current Project State:**
+    - [Document 1]: [Analysis - what's there, what's complete, what might be missing]
+    - [Document 2]: [Analysis]
+    **Specific Suggestions Based on Your Project:**
+    - [Specific suggestion based on actual gaps - e.g., 'Your Itinerary has dates but no hotel bookings - I can add hotel recommendations']
+    - [Another specific suggestion based on content analysis]
+    **General Capabilities:**
+    - Add, update, or modify content in your documents
+    - Create new documents for related topics
+    - Search the web for current information when needed
+    - Summarize or analyze your documents
+    What would you like me to work on first?"
 - For summarize/read requests: include actual content summary from document(s)
 - For clarification: include your clarification_question
 - For confirmation: include your confirmation_prompt
@@ -397,44 +528,88 @@ When you make changes to documents (should_edit: true) or create new documents (
 
 The content_summary will be shown to the user in the chat, so make it clear and informative.
 
+=== CONVERSATIONAL RESPONSE FORMAT ===
+
+**For Greetings (e.g., "hi", "hey", "hello"):**
+When providing conversational responses for greetings, follow this structure:
+
+1. **Greeting and Offer to Help**:
+   - Start with a friendly greeting
+   - Reference the project name
+   - Offer assistance
+
+2. **Project Summary**:
+   - Analyze all documents in the project (names, standing instructions, content previews)
+   - Infer the overall purpose/topic of the project
+   - Provide a brief, natural summary (1-2 sentences)
+   - Examples:
+     * "This project contains information about mental health and its benefits"
+     * "This is an assignment grading project with scripts and parsed submissions"
+     * "This project tracks recipes and meal planning"
+
+3. **Document List**:
+   - List all documents in a numbered format
+   - For each document, provide a brief description based on:
+     * Document name
+     * Standing instruction
+     * Content preview (if available)
+   - Format: "1. [Document Name] - [description]"
+   - Keep descriptions concise but informative (1 short sentence)
+   - Examples:
+     * "1. Health Improvement - contains steps to improve health"
+     * "2. Diet Routine - your daily diet routine till Friday"
+     * "3. Grading Scripts - automated scripts for parsing submissions"
+
+4. **Call to Action**:
+   - End with a question asking what they'd like to work on
+
+Example format:
+"Hi! How can I help with your Mental Health project? This project contains information about mental health and its benefits. Here are the documents in this project:
+1. Health Improvement - contains steps to improve health
+2. Diet Routine - your daily diet routine till Friday
+What would you like to work on?"
+
+**For Capability Questions (e.g., "what can you do", "what else can you do", "other than what you told"):**
+When user asks about your capabilities, you MUST:
+
+1. **First: Deep Project Analysis** (MANDATORY):
+   - Analyze ALL documents thoroughly - read and understand all content
+   - Understand project purpose, content, structure, and relationships
+   - Identify gaps, incomplete sections, missing related topics
+   - Note what's complete and what could be improved
+   - Think: "What does this project need? What's missing? What could be enhanced?"
+
+2. **Then: Provide Contextual Response**:
+   - Start with project state analysis (what's in each document, what's complete, what's missing)
+   - Provide specific suggestions based on actual gaps and opportunities you identified
+   - Include general capabilities
+   - **CRITICAL: DO NOT use the greeting format - this is a capability question, not a greeting**
+   - **CRITICAL: DO NOT repeat what you already said - provide NEW insights and suggestions**
+
+Example format:
+"Based on my analysis of your [Project Name] project, here's what I can help you with:
+
+**Current Project State:**
+- [Document 1]: [Analysis - what's there, what's complete, what might be missing]
+- [Document 2]: [Analysis]
+
+**Specific Suggestions Based on Your Project:**
+- [Specific suggestion based on actual gaps - e.g., 'Your Itinerary has dates but no hotel bookings - I can add hotel recommendations']
+- [Another specific suggestion based on content analysis - e.g., 'Your Recipes document is missing dessert recipes - I can add a desserts section']
+- [Suggestion based on incomplete sections or missing related topics]
+
+**General Capabilities:**
+- Add, update, or modify content in your documents
+- Create new documents for related topics
+- Search the web for current information when needed
+- Summarize or analyze your documents
+- Maintain consistency across your project
+
+What would you like me to work on first?"
+
 === EXAMPLES ===
 
-User: "Add hotel recommendations to the itinerary"
-→ should_edit: true, 
-  document_id: <itinerary_id>, 
-  intent_statement: "I'll add hotel recommendations to the Itinerary document", 
-  change_summary: "Adding hotel recommendations with prices",
-  content_summary: "Added a new 'Hotels' section with three recommendations: The Grand Plaza (downtown, $150/night, 4-star), Seaside Resort (beachfront, $200/night, 5-star), and Budget Inn (near airport, $80/night, 3-star). Each entry includes location, price range, star rating, and key amenities like WiFi, breakfast, and parking availability."
-
-User: "What should I add to make it better?"
-→ should_edit: false, conversational_response: "Based on your content, you might consider..."
-
-User: "Add a dessert section"
-→ needs_clarification: true, clarification_question: "Which document should I add the dessert section to? You have: [list documents]"
-
-User: "Delete the budget section"
-→ pending_confirmation: true, confirmation_prompt: "I'll remove the Budget section from the Budget document. This will delete all budget information. Should I proceed?"
-
-User: "Hi!"
-→ should_edit: false, conversational_response: "Hello! How can I help you with your documents today?"
-
-User: "Summarize the itinerary document"
-→ should_edit: false, conversational_response: "Here's a summary of your Itinerary document: [actual summary from content]"
-
-User: "Add my favorite recipes"
-→ **First check: Does a document named "Recipes" exist in PROJECT DOCUMENTS?**
-  - If YES → should_edit: true, document_id: <recipes_document_id>, intent_statement: "I'll add your favorite recipes to the existing Recipes document"
-  - If NO → should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' for your favorite recipes"
-
-User: "Create a new document for recipes"
-→ **First check: Does a document named "Recipes" exist in PROJECT DOCUMENTS?**
-  - If YES → should_edit: true, document_id: <recipes_document_id>, intent_statement: "I'll update the existing Recipes document"
-  - If NO → should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' in this project"
-
-User: "Create a travel guide document"
-→ **First check: Does a document named "Travel Guide" exist in PROJECT DOCUMENTS?**
-  - If YES → should_edit: true, document_id: <travel_guide_document_id>, intent_statement: "I'll update the existing Travel Guide document"
-  - If NO → should_create: true, document_name: "Travel Guide", intent_statement: "I'll create a new document called 'Travel Guide' in this project"
+{PROMPT_EXAMPLES}
 
 === FORCE DECISIVE OUTCOMES ===
 Every document-related instruction MUST result in one of:
@@ -473,6 +648,9 @@ NEVER return vague replies like:
 5. Show intent before acting - tell user what you'll do
 6. Be DECISIVE - when information exists, use it; when in doubt, act on most likely interpretation"""
         
+        # Insert examples into the prompt
+        prompt = prompt.replace("{PROMPT_EXAMPLES}", PROMPT_EXAMPLES)
+        
         return prompt
     
     @staticmethod
@@ -480,7 +658,8 @@ NEVER return vague replies like:
         user_message: str,
         standing_instruction: str,
         current_content: str,
-        web_search_results: Optional[str] = None
+        web_search_results: Optional[str] = None,
+        edit_scope: Optional[str] = None
     ) -> str:
         """Generate prompt for rewriting document content"""
         prompt = f"""You are rewriting a living document. The user has requested: "{user_message}"
@@ -499,9 +678,70 @@ Current document content:
 
 """
         
+        # Determine preservation strategy based on edit_scope
+        if edit_scope == "selective":
+            preservation_strategy = """=== SELECTIVE EDIT - PRESERVE EVERYTHING ELSE ===
+**CRITICAL**: This is a SELECTIVE edit. You must:
+
+1. PARSE DOCUMENT STRUCTURE FIRST:
+   - Extract all headings (## Heading = section)
+   - Identify all sections and their content
+   - Map the complete document structure
+
+2. IDENTIFY WHAT TO CHANGE:
+   - Based on user request: "{user_message}"
+   - Determine EXACTLY which parts need modification:
+     * Which heading? (if heading change)
+     * Which section? (if section change)
+     * What content? (if content change)
+   - Everything else: MARK AS PRESERVE
+
+3. PRESERVE ALL OTHER CONTENT:
+   - Keep ALL sections not mentioned in the request
+   - Keep ALL content in sections not being modified
+   - Keep ALL structure, formatting, links, images exactly as-is
+   - Do NOT remove, modify, or reorganize unrelated sections
+
+4. THEN REWRITE:
+   - Modify ONLY the identified parts
+   - Copy ALL other content exactly as-is
+   - Maintain structure completely
+
+**Examples:**
+- User: "replace the heading" → Change ONLY the heading text, keep all sections unchanged
+- User: "add to section X" → Add ONLY to section X, preserve all other sections
+- User: "change title" → Change ONLY the title, preserve everything else
+
+**REMEMBER**: When in doubt, preserve content. Only change what was explicitly requested."""
+        elif edit_scope == "full":
+            preservation_strategy = """=== FULL REWRITE - PRESERVE STRUCTURE ===
+This is a FULL rewrite. You may modify more extensively, but:
+- Still preserve sections not mentioned in the request
+- Maintain document structure and organization
+- Keep unrelated content intact when possible"""
+        else:
+            # Default: assume selective for safety
+            preservation_strategy = """=== PRESERVATION STRATEGY ===
+**CRITICAL**: Preserve ALL existing content unless explicitly asked to remove it.
+
+1. PARSE DOCUMENT STRUCTURE:
+   - Extract all headings and sections
+   - Understand document organization
+
+2. IDENTIFY WHAT TO CHANGE:
+   - Based on user request, determine which parts need modification
+   - Everything else: PRESERVE
+
+3. PRESERVE EVERYTHING ELSE:
+   - Keep ALL sections not mentioned
+   - Keep ALL content in sections not being modified
+   - Maintain structure completely"""
+        
+        prompt += preservation_strategy + "\n\n"
+        
         prompt += """Your task:
-1. Understand the user's intent
-2. Rewrite the ENTIRE document content (never append or partially edit)
+1. Understand the user's intent - determine what needs to change
+2. **PRESERVE ALL OTHER CONTENT** - only modify what was explicitly requested
 3. Maintain consistency with the standing instruction
 4. Ensure the content is complete and coherent
 5. If web search results were provided, use them to ensure factual accuracy
@@ -524,7 +764,13 @@ Current document content:
    - **Blockquotes**: Preserve all > blockquote formatting
    - **Other formatting**: Preserve bold, italic, strikethrough, and other markdown syntax
    - **Structure**: Only modify content that directly relates to the user's specific request
-   - **Selective editing**: If the user asks to "add X" or "update Y section", preserve everything else unchanged and only modify/add what was requested
+   - **Sections**: Preserve ALL sections - only modify sections explicitly mentioned in the user's request
+   - **Content Preservation**: When user request is specific and targeted, preserve everything else unchanged
+
+**CRITICAL REMINDER**: 
+- If edit_scope is "selective": Change ONLY what was requested, preserve ALL other content
+- When user says "replace heading" or "change title": Change ONLY that text, keep all sections unchanged
+- When user says "add to section X": Modify ONLY section X, preserve all other sections
 
 Return ONLY the new complete markdown content. Do not include any explanations or metadata."""
         

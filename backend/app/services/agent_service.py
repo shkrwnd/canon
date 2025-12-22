@@ -125,12 +125,16 @@ class AgentService:
                     
                     if target_document:
                         logger.info(f"Rewriting document {target_document_id}")
-                        # Rewrite the entire document content
+                        # Get edit_scope from decision to determine preservation strategy
+                        edit_scope = decision.get("edit_scope")
+                        logger.debug(f"Edit scope: {edit_scope}")
+                        # Rewrite the document content with edit scope awareness
                         new_content = await self.llm_service.rewrite_document_content(
                             user_message=user_message,
                             standing_instruction=target_document.standing_instruction,
                             current_content=target_document.content,
-                            web_search_results=web_search_results
+                            web_search_results=web_search_results,
+                            edit_scope=edit_scope
                         )
                         
                         # Validate the rewritten content
@@ -147,12 +151,13 @@ class AgentService:
                             span.set_attribute("agent.validation_failed", True)
                             span.set_attribute("agent.validation_errors", str(validation_result.errors))
                             
-                            # Retry rewrite
+                            # Retry rewrite with same edit_scope
                             new_content = await self.llm_service.rewrite_document_content(
                                 user_message=user_message,
                                 standing_instruction=target_document.standing_instruction,
                                 current_content=target_document.content,
-                                web_search_results=web_search_results
+                                web_search_results=web_search_results,
+                                edit_scope=edit_scope
                             )
                             
                             # Validate again
@@ -162,50 +167,93 @@ class AgentService:
                             )
                             
                             if not validation_result.is_valid:
-                                # Still failing - surface error clearly
+                                # Still failing - DO NOT UPDATE
                                 error_msg = f"Document rewrite failed validation after retry: {', '.join(validation_result.errors)}"
                                 logger.error(error_msg)
                                 span.record_exception(Exception(error_msg))
                                 # Store validation errors in decision for user feedback
                                 decision['validation_errors'] = validation_result.errors
                                 decision['validation_warnings'] = validation_result.warnings
-                        
-                        # Log warnings even if validation passed
-                        if validation_result.warnings:
-                            logger.info(f"Document rewrite validation warnings: {validation_result.warnings}")
-                            decision['validation_warnings'] = validation_result.warnings
-                        
-                        # Update document using repository
-                        with tracer.start_as_current_span("agent.update_document") as db_span:
-                            db_span.set_attribute("db.operation", "update_document")
-                            db_span.set_attribute("db.document_id", target_document_id)
-                            db_span.set_attribute("db.validation_passed", validation_result.is_valid)
-                            updated_document_obj = self.document_repo.update(
-                                target_document_id,
-                                content=new_content
-                            )
-                            
-                            if updated_document_obj:
-                                # Commit the transaction
-                                self.document_repo.commit()
-                                self.db.refresh(updated_document_obj)
-                                
-                                updated_document = {
-                                    "id": updated_document_obj.id,
-                                    "name": updated_document_obj.name,
-                                    "standing_instruction": updated_document_obj.standing_instruction,
-                                    "content": updated_document_obj.content,
-                                    "project_id": updated_document_obj.project_id,
-                                    "user_id": updated_document_obj.user_id,
-                                    "created_at": updated_document_obj.created_at,
-                                    "updated_at": updated_document_obj.updated_at
-                                }
-                                logger.info(f"Document {target_document_id} updated successfully")
-                                db_span.set_attribute("db.update_success", True)
-                                span.set_attribute("agent.document_updated", True)
-                            else:
-                                db_span.set_attribute("db.update_success", False)
+                                # Skip update - validation failed
+                                updated_document = None
+                                logger.warning(f"Skipping document update for document {target_document_id} due to validation failure")
                                 span.set_attribute("agent.document_updated", False)
+                            else:
+                                # Validation passed - proceed with update
+                                # Log warnings even if validation passed
+                                if validation_result.warnings:
+                                    logger.info(f"Document rewrite validation warnings: {validation_result.warnings}")
+                                    decision['validation_warnings'] = validation_result.warnings
+                                
+                                # Update document using repository
+                                with tracer.start_as_current_span("agent.update_document") as db_span:
+                                    db_span.set_attribute("db.operation", "update_document")
+                                    db_span.set_attribute("db.document_id", target_document_id)
+                                    db_span.set_attribute("db.validation_passed", validation_result.is_valid)
+                                    updated_document_obj = self.document_repo.update(
+                                        target_document_id,
+                                        content=new_content
+                                    )
+                                    
+                                    if updated_document_obj:
+                                        # Commit the transaction
+                                        self.document_repo.commit()
+                                        self.db.refresh(updated_document_obj)
+                                        
+                                        updated_document = {
+                                            "id": updated_document_obj.id,
+                                            "name": updated_document_obj.name,
+                                            "standing_instruction": updated_document_obj.standing_instruction,
+                                            "content": updated_document_obj.content,
+                                            "project_id": updated_document_obj.project_id,
+                                            "user_id": updated_document_obj.user_id,
+                                            "created_at": updated_document_obj.created_at,
+                                            "updated_at": updated_document_obj.updated_at
+                                        }
+                                        logger.info(f"Document {target_document_id} updated successfully")
+                                        db_span.set_attribute("db.update_success", True)
+                                        span.set_attribute("agent.document_updated", True)
+                                    else:
+                                        db_span.set_attribute("db.update_success", False)
+                                        span.set_attribute("agent.document_updated", False)
+                        else:
+                            # Validation passed on first try - proceed with update
+                            # Log warnings even if validation passed
+                            if validation_result.warnings:
+                                logger.info(f"Document rewrite validation warnings: {validation_result.warnings}")
+                                decision['validation_warnings'] = validation_result.warnings
+                            
+                            # Update document using repository
+                            with tracer.start_as_current_span("agent.update_document") as db_span:
+                                db_span.set_attribute("db.operation", "update_document")
+                                db_span.set_attribute("db.document_id", target_document_id)
+                                db_span.set_attribute("db.validation_passed", validation_result.is_valid)
+                                updated_document_obj = self.document_repo.update(
+                                    target_document_id,
+                                    content=new_content
+                                )
+                                
+                                if updated_document_obj:
+                                    # Commit the transaction
+                                    self.document_repo.commit()
+                                    self.db.refresh(updated_document_obj)
+                                    
+                                    updated_document = {
+                                        "id": updated_document_obj.id,
+                                        "name": updated_document_obj.name,
+                                        "standing_instruction": updated_document_obj.standing_instruction,
+                                        "content": updated_document_obj.content,
+                                        "project_id": updated_document_obj.project_id,
+                                        "user_id": updated_document_obj.user_id,
+                                        "created_at": updated_document_obj.created_at,
+                                        "updated_at": updated_document_obj.updated_at
+                                    }
+                                    logger.info(f"Document {target_document_id} updated successfully")
+                                    db_span.set_attribute("db.update_success", True)
+                                    span.set_attribute("agent.document_updated", True)
+                                else:
+                                    db_span.set_attribute("db.update_success", False)
+                                    span.set_attribute("agent.document_updated", False)
                 
                 # Handle document creation if requested
                 created_document = None

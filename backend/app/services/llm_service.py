@@ -126,7 +126,8 @@ class LLMService:
         user_message: str,
         standing_instruction: str,
         current_content: str,
-        web_search_results: Optional[str] = None
+        web_search_results: Optional[str] = None,
+        edit_scope: Optional[str] = None
     ) -> str:
         """
         Rewrite document content based on user intent
@@ -136,12 +137,13 @@ class LLMService:
             standing_instruction: Document's standing instruction
             current_content: Current document content
             web_search_results: Optional web search results
+            edit_scope: Optional edit scope ("selective" or "full")
         
         Returns:
             New document content
         """
         prompt = self.prompt_service.get_document_rewrite_prompt(
-            user_message, standing_instruction, current_content, web_search_results
+            user_message, standing_instruction, current_content, web_search_results, edit_scope
         )
         
         messages = [

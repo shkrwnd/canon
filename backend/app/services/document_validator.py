@@ -127,13 +127,36 @@ class DocumentValidator:
             if placeholder in new_content:
                 errors.append(f"Found placeholder in output: {placeholder}")
         
-        # Check 3: Did we preserve structure? (warnings, not errors)
+        # Check 3: Did we preserve structure? (ERROR if significant sections lost)
         original_headings = set(DocumentValidator.extract_headings(original_content))
         new_headings = set(DocumentValidator.extract_headings(new_content))
         
         missing_sections = original_headings - new_headings
-        if missing_sections:
-            warnings.append(f"Missing sections from original: {', '.join(missing_sections)}")
+        if missing_sections and original_headings:
+            # Calculate percentage of sections lost
+            sections_lost_pct = len(missing_sections) / len(original_headings) * 100
+            
+            # If we lost more than 10% of sections, that's an error (content was likely accidentally removed)
+            if sections_lost_pct > 10:
+                errors.append(
+                    f"Lost {len(missing_sections)} sections ({sections_lost_pct:.1f}% of document): "
+                    f"{', '.join(list(missing_sections)[:5])}"
+                    + (f" and {len(missing_sections) - 5} more" if len(missing_sections) > 5 else "")
+                    + ". This suggests content was accidentally removed."
+                )
+            else:
+                # Less than 10% lost - warning but not error (might be intentional)
+                warnings.append(f"Missing sections from original: {', '.join(list(missing_sections)[:3])}")
+        
+        # Check 3.5: Section count validation (additional safety check)
+        if original_headings and new_headings:
+            # If we have significantly fewer sections, that's suspicious
+            if len(new_headings) < len(original_headings) * 0.8:  # Lost more than 20% of sections
+                errors.append(
+                    f"Document structure significantly changed: "
+                    f"Original had {len(original_headings)} sections, new has {len(new_headings)} sections. "
+                    f"This suggests content was accidentally removed."
+                )
         
         # Check 4: Is content reasonable length?
         # If we lost more than 90% of content, something is wrong
