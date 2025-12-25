@@ -25,6 +25,11 @@ User: "Tell me about the recipes document"
 → should_edit: false, should_create: false, needs_clarification: false,
   conversational_response: "The Recipes document contains [description based on content]. It includes sections on [list sections]. [Brief overview of content]."
 
+User: "where did you make the changes" or "where did you save it" or "where is the script"
+→ should_edit: false, should_create: false, needs_clarification: false,
+  conversational_response: "I [created/updated] the [Document Name] document. [Brief description of what was done]. You can find it in your project documents."
+  CRITICAL: This is a QUESTION asking for location/info, NOT an action request
+
 User: "How many documents do I have?"
 → should_edit: false, should_create: false, needs_clarification: false,
   conversational_response: "You have [number] documents in this project: [list document names]. [Brief description of each]"
@@ -69,6 +74,27 @@ User: "Add hotel recommendations to the itinerary"
   intent_statement: "I'll add hotel recommendations to the Itinerary document",
   change_summary: "Adding hotel recommendations with prices",
   content_summary: "Added a new 'Hotels' section with three recommendations: The Grand Plaza (downtown, $150/night, 4-star), Seaside Resort (beachfront, $200/night, 5-star), and Budget Inn (near airport, $80/night, 3-star). Each entry includes location, price range, star rating, and key amenities like WiFi, breakfast, and parking availability."
+
+User: "Edit the Python guide document and add the latest Python version information"
+→ should_edit: true, should_create: false, document_id: <python_guide_id>, edit_scope: "selective",
+  needs_web_search: true, search_query: "latest Python version 2024",
+  intent_statement: "I'll add the latest Python version information to the Python guide document",
+  change_summary: "Adding latest Python version information",
+  content_summary: "Added a new section about the latest Python version, including version number, release date, and key new features based on current information from web search. Sources section included with all reference URLs."
+
+User: "Add the current React best practices to the React guide"
+→ should_edit: true, should_create: false, document_id: <react_guide_id>, edit_scope: "selective",
+  needs_web_search: true, search_query: "React best practices 2024",
+  intent_statement: "I'll add current React best practices to the React guide document",
+  change_summary: "Adding current React best practices",
+  content_summary: "Added a section on current React best practices for 2024, including modern patterns, hooks usage, and performance optimization techniques based on latest industry standards. Sources section included with all reference URLs."
+
+User: "edit the document about the latest Python features to be more verbose"
+→ should_edit: true, should_create: false, document_id: <latest_python_features_id>, edit_scope: "selective",
+  needs_web_search: true, search_query: "latest Python features 2024",
+  intent_statement: "I'll expand the document about latest Python features with more detailed information",
+  change_summary: "Expanding document with more verbose descriptions of latest Python features",
+  content_summary: "Expanded the document with more detailed explanations of the latest Python features, including comprehensive descriptions, use cases, and examples. All information verified with current web search results. Sources section included with all reference URLs."
 
 User: "Add hotels"
 → **First: Analyze project - is this travel-related? Check documents for travel/itinerary content**
@@ -117,6 +143,17 @@ User: "Add my favorite recipes"
     content_summary: "Added your favorite recipes: [list recipes added with brief descriptions]"
   - If NO → should_create: true, document_name: "Recipes", intent_statement: "I'll create a new document called 'Recipes' for your favorite recipes"
 
+User: "save it" or "save that" or "save this"
+→ **CRITICAL: Check conversation history for content to save**
+→ should_edit: true, should_create: false, edit_scope: "selective",
+  - If document mentioned in conversation → use that document_id
+  - If no document mentioned → use most recent/relevant document or create new one
+  - Extract content from previous agent response in conversation history
+  - intent_statement: "I'll save that content to [document name]",
+  - change_summary: "Saving content to document",
+  - content_summary: "Saved the [content type] to [document name]: [brief description of what was saved]"
+  - Example: User says "save it" after agent provided a script → should_edit: true, add script content to document
+
 User: "rewrite the entire document"
 → should_edit: true, document_id: <document_id>, edit_scope: "full", intent_statement: "I'll rewrite the entire document"
   - edit_scope: "full" because user explicitly requested full rewrite
@@ -159,6 +196,22 @@ User: "I need a new document for my workout routine"
     intent_statement: "I'll create a new document called 'Workout Routine' for your workout plans",
     change_summary: "Creating new Workout Routine document",
     content_summary: "Created a new Workout Routine document with [initial content]"
+
+User: "create a script" or "create a script for that" or "can you create a script"
+→ **First check: Does a document named "Script" or "Video Script" exist?**
+  - If NO → should_create: true, should_edit: false, document_name: "Script" or "Video Script",
+    document_content: "[Generate the actual script content based on context/conversation history]",
+    intent_statement: "I'll create a new document called 'Script' with the script content",
+    change_summary: "Creating new Script document",
+    content_summary: "Created a new Script document with [description of script content - e.g., 'a video script outline with introduction, key recommendations, engagement prompts, and conclusion']"
+  - If YES → should_edit: true, document_id: <script_document_id>, intent_statement: "I'll update the existing Script document"
+
+User: "create a plan" or "create a video script" or "create a [noun]"
+→ **Pattern: "create a [noun]" → document_name: capitalize the noun**
+  - "create a plan" → document_name: "Plan"
+  - "create a video script" → document_name: "Video Script"
+  - "create a budget" → document_name: "Budget"
+  - Check if document exists first → if yes, edit instead of create
 
 === 4. NEEDS_CLARIFICATION INTENT (needs_clarification: true) ===
 

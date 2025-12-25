@@ -4,14 +4,14 @@ from ..repositories import DocumentRepository, ProjectRepository, ChatRepository
 from ..models import Document, Project, ChatMessage, MessageRole
 from ..schemas import AgentActionRequest, AgentActionResponse, ChatCreate, ChatMessageCreate, Document as DocumentSchema, DocumentCreate, ChatMessage as ChatMessageSchema
 from ..exceptions import ValidationError
-from ..core.events import event_bus, AgentActionCompletedEvent
+from ..core.events import event_bus, AgentActionCompletedEvent, DocumentUpdatedEvent
 from ..core.telemetry import get_tracer
 from opentelemetry import trace
 from .llm_service import LLMService
 from .chat_service import ChatService
 from .document_service import DocumentService
 from .document_validator import DocumentValidator, ValidationResult
-from ..clients import search_web
+from .web_search import WebSearchService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class AgentService:
         self.chat_repo = ChatRepository(db)
         self.db = db
         self.llm_service = llm_service
+        self.web_search_service = WebSearchService(llm_service)
         self.document_service = document_service
     
     async def process_agent_action(
@@ -99,21 +100,64 @@ class AgentService:
                     project_context=project_context,
                     chat_history=chat_history
                 )
+                
+                # Log decision details for debugging
+                logger.info(f"Agent decision received: should_edit={decision.get('should_edit')}, "
+                            f"should_create={decision.get('should_create')}, "
+                            f"document_id={decision.get('document_id')}, "
+                            f"needs_web_search={decision.get('needs_web_search')}, "
+                            f"search_query={decision.get('search_query')}, "
+                            f"intent_statement={decision.get('intent_statement')}, "
+                            f"content_summary={'present' if decision.get('content_summary') else 'missing'}, "
+                            f"change_summary={'present' if decision.get('change_summary') else 'missing'}")
+                logger.debug(f"Full decision JSON: {decision}")
+                
                 span.set_attribute("agent.decision.should_edit", decision.get("should_edit", False))
                 span.set_attribute("agent.decision.document_id", decision.get("document_id"))
                 span.set_attribute("agent.decision.needs_web_search", decision.get("needs_web_search", False))
                 
                 web_search_performed = False
                 web_search_results = None
+                web_search_result_obj = None  # Will hold WebSearchResult object with all attempts
                 
-                # Perform web search if needed
+                # Log web search trigger check
+                needs_web_search = decision.get("needs_web_search", False)
+                search_query = decision.get("search_query")
+                logger.info(f"Web search check: needs_web_search={needs_web_search}, search_query={search_query}")
+                if not needs_web_search:
+                    logger.info("Web search not triggered: needs_web_search is False or missing")
+                elif not search_query:
+                    logger.info("Web search not triggered: search_query is missing or empty")
+                else:
+                    logger.info(f"Web search will be performed with query: {search_query}")
+                
+                # Perform web search if needed (using WebSearchService for retry logic)
                 if decision.get("needs_web_search") and decision.get("search_query"):
                     logger.info(f"Performing web search: {decision['search_query']}")
                     with tracer.start_as_current_span("agent.web_search") as web_span:
                         web_span.set_attribute("web_search.query", decision["search_query"])
-                        web_search_results = search_web(decision["search_query"])
-                        web_search_performed = True
+                        
+                        # Use WebSearchService for search with retry logic
+                        web_search_result_obj = await self.web_search_service.search_with_retry(
+                            initial_query=decision["search_query"],
+                            user_message=user_message,
+                            context=f"Project: {project.name if project else 'Unknown'}"
+                        )
+                        
+                        # Get final results (best quality or latest)
+                        web_search_results = web_search_result_obj.get_best_results()
+                        web_search_performed = len(web_search_result_obj.attempts) > 0
+                        
                         web_span.set_attribute("web_search.results_count", len(web_search_results) if web_search_results else 0)
+                        web_span.set_attribute("web_search.attempts", len(web_search_result_obj.attempts))
+                        web_span.set_attribute("web_search.was_retried", web_search_result_obj.was_retried())
+                else:
+                    logger.info("Web search skipped: needs_web_search=False or search_query missing")
+                
+                # Log web search status after check
+                logger.info(f"Web search status: performed={web_search_performed}, "
+                            f"results_length={len(web_search_results) if web_search_results else 0}, "
+                            f"attempts={len(web_search_result_obj.attempts) if web_search_result_obj else 0}")
                 
                 # Rewrite document if decision says so
                 updated_document = None
@@ -151,13 +195,18 @@ class AgentService:
                             span.set_attribute("agent.validation_failed", True)
                             span.set_attribute("agent.validation_errors", str(validation_result.errors))
                             
-                            # Retry rewrite with same edit_scope
+                            # Retry rewrite with validation errors included and force selective scope
+                            # If validation failed due to lost sections, use selective to preserve content
+                            retry_edit_scope = "selective" if edit_scope == "full" else edit_scope
+                            logger.debug(f"Retrying with edit_scope: {retry_edit_scope} (was {edit_scope})")
+                            
                             new_content = await self.llm_service.rewrite_document_content(
                                 user_message=user_message,
                                 standing_instruction=target_document.standing_instruction,
                                 current_content=target_document.content,
                                 web_search_results=web_search_results,
-                                edit_scope=edit_scope
+                                edit_scope=retry_edit_scope,
+                                validation_errors=validation_result.errors
                             )
                             
                             # Validate again
@@ -213,6 +262,14 @@ class AgentService:
                                         logger.info(f"Document {target_document_id} updated successfully")
                                         db_span.set_attribute("db.update_success", True)
                                         span.set_attribute("agent.document_updated", True)
+                                        
+                                        # Publish document updated event
+                                        event_bus.publish(DocumentUpdatedEvent(
+                                            document_id=target_document_id,
+                                            project_id=updated_document_obj.project_id,
+                                            user_id=user_id,
+                                            changes={"content": "updated"}  # Content was updated
+                                        ))
                                     else:
                                         db_span.set_attribute("db.update_success", False)
                                         span.set_attribute("agent.document_updated", False)
@@ -251,6 +308,14 @@ class AgentService:
                                     logger.info(f"Document {target_document_id} updated successfully")
                                     db_span.set_attribute("db.update_success", True)
                                     span.set_attribute("agent.document_updated", True)
+                                    
+                                    # Publish document updated event
+                                    event_bus.publish(DocumentUpdatedEvent(
+                                        document_id=target_document_id,
+                                        project_id=updated_document_obj.project_id,
+                                        user_id=user_id,
+                                        changes={"content": "updated"}  # Content was updated
+                                    ))
                                 else:
                                     db_span.set_attribute("db.update_success", False)
                                     span.set_attribute("agent.document_updated", False)
@@ -347,14 +412,29 @@ class AgentService:
                         created_document = None
                     else:
                         # Validation passed - proceed with creation
-                        # Perform web search if needed for document creation
+                        # Perform web search if needed for document creation (using WebSearchService)
                         if decision.get("needs_web_search") and decision.get("search_query"):
                             logger.info(f"Performing web search for document creation: {decision['search_query']}")
                             with tracer.start_as_current_span("agent.web_search_for_create") as web_span:
                                 web_span.set_attribute("web_search.query", decision["search_query"])
-                                web_search_results_for_create = search_web(decision["search_query"])
+                                
+                                # Use WebSearchService for search with retry logic
+                                web_search_result_obj_create = await self.web_search_service.search_with_retry(
+                                    initial_query=decision["search_query"],
+                                    user_message=user_message,
+                                    context=f"Project: {project.name if project else 'Unknown'}, Creating document: {document_name}"
+                                )
+                                
+                                web_search_results_for_create = web_search_result_obj_create.get_best_results()
                                 if web_search_results_for_create:
                                     initial_content = f"{initial_content}\n\n{web_search_results_for_create}" if initial_content else web_search_results_for_create
+                                
+                                # Store web search result for later use in response
+                                web_search_result_obj = web_search_result_obj_create
+                                web_search_performed = len(web_search_result_obj_create.attempts) > 0
+                                
+                                web_span.set_attribute("web_search.attempts", len(web_search_result_obj_create.attempts))
+                                web_span.set_attribute("web_search.was_retried", web_search_result_obj_create.was_retried())
                         
                         try:
                             if self.document_service:
@@ -424,7 +504,8 @@ class AgentService:
                     "updated_document": updated_document,
                     "created_document": created_document,
                     "web_search_performed": web_search_performed,
-                    "web_search_results": web_search_results if web_search_performed else None
+                    "web_search_results": web_search_results if web_search_performed else None,
+                    "web_search_result": web_search_result_obj  # Full WebSearchResult object with all attempts
                 }
             except Exception as e:
                 logger.error(f"Error processing agent action: {e}")
@@ -526,10 +607,29 @@ class AgentService:
             # Get chat history for context (excluding the message we just added)
             chat_messages_db = chat_service.get_chat_messages(user_id, chat.id)
             # Filter out the user message we just added to avoid duplication
-            chat_history_for_llm = [
-                {"role": msg.role.value if hasattr(msg.role, 'value') else msg.role, "content": msg.content}
-                for msg in chat_messages_db[:-1]  # Exclude the last message (the one we just added)
-            ]
+            chat_history_for_llm = []
+            for msg in chat_messages_db[:-1]:  # Exclude the last message
+                role = msg.role.value if hasattr(msg.role, 'value') else msg.role
+                content = msg.content
+                # Use message_metadata attribute (column name is "metadata" but attribute is "message_metadata")
+                metadata = msg.message_metadata if msg.message_metadata else {}
+                decision = metadata.get("decision", {}) if isinstance(metadata, dict) else {}
+                
+                # Include decision metadata in history for context
+                history_item = {
+                    "role": role,
+                    "content": content
+                }
+                
+                # Add context about pending confirmation if present
+                if decision.get("pending_confirmation"):
+                    history_item["pending_confirmation"] = True
+                    history_item["intent_statement"] = decision.get("intent_statement", "")
+                    history_item["document_id"] = decision.get("document_id")
+                    history_item["should_edit"] = decision.get("should_edit", False)
+                    history_item["should_create"] = decision.get("should_create", False)
+                
+                chat_history_for_llm.append(history_item)
             
             # Process agent action
             result = await self.process_agent_action(
@@ -551,6 +651,19 @@ class AgentService:
             change_summary = decision.get("change_summary")
             clarification_question = decision.get("clarification_question")
             confirmation_prompt = decision.get("confirmation_prompt")
+            
+            # Log response formatting details
+            logger.info(f"Response formatting: should_edit={should_edit}, should_create={should_create}, "
+                        f"updated_document={'present' if result.get('updated_document') else 'missing'}, "
+                        f"created_document={'present' if result.get('created_document') else 'missing'}, "
+                        f"web_search_performed={result.get('web_search_performed')}, "
+                        f"web_search_result={'present' if result.get('web_search_result') else 'missing'}, "
+                        f"content_summary={'present' if decision.get('content_summary') else 'missing'}, "
+                        f"change_summary={'present' if change_summary else 'missing'}, "
+                        f"intent_statement={'present' if intent_statement else 'missing'}")
+            if result.get('web_search_result'):
+                logger.info(f"Web search result details: attempts={len(result.get('web_search_result').attempts)}, "
+                            f"was_retried={result.get('web_search_result').was_retried()}")
             
             # Format agent response content based on decision type
             if needs_clarification:
@@ -588,9 +701,20 @@ class AgentService:
                             preview = doc_content[:200] + "..." if len(doc_content) > 200 else doc_content
                             parts.append(f"\n\n**Initial Content Preview:**\n{preview}")
                     
-                    # Part 3: Web search note (if applicable)
-                    if result.get("web_search_performed"):
-                        parts.append("\n\n_I performed a web search to gather initial content._")
+                    # Part 3: Web search details (if applicable)
+                    web_search_result = result.get("web_search_result")
+                    if web_search_result and web_search_result.attempts:
+                        parts.append("\n\n**Web Search Details:**")
+                        for attempt in web_search_result.attempts:
+                            parts.append(f"\n**Search Query {attempt.attempt_number}:** `{attempt.query}`")
+                            if attempt.summary:
+                                parts.append(f"**Results Summary:** {attempt.summary}")
+                            if attempt.quality_score is not None:
+                                parts.append(f"**Quality Score:** {attempt.quality_score:.2f}/1.0")
+                            if attempt.retry_reason:
+                                parts.append(f"**Retry Reason:** {attempt.retry_reason}")
+                            if attempt.attempt_number < len(web_search_result.attempts):
+                                parts.append("")  # Add spacing between attempts
                     
                     # Join all parts with newlines for better readability
                     agent_response_content = "\n".join(parts)
@@ -656,6 +780,13 @@ class AgentService:
                 if intent_statement:
                     parts.append(intent_statement)
                 
+                # Log response building details
+                logger.info(f"Building edit response: intent_statement={'present' if intent_statement else 'missing'}, "
+                            f"content_summary={'present' if decision.get('content_summary') else 'missing'}, "
+                            f"change_summary={'present' if change_summary else 'missing'}, "
+                            f"web_search_result={'present' if result.get('web_search_result') else 'missing'}, "
+                            f"web_search_attempts={len(result.get('web_search_result').attempts) if result.get('web_search_result') else 0}")
+                
                 # Part 2: Content summary (what actually changed/added)
                 # This is the detailed summary of the content that was added or changed
                 # It helps the user understand what's now in the document
@@ -671,9 +802,20 @@ class AgentService:
                 if validation_warnings:
                     parts.append(f"\n\n**Note:** {', '.join(validation_warnings)}")
                 
-                # Part 4: Web search note (if applicable)
-                if result.get("web_search_performed"):
-                    parts.append("\n\n_I performed a web search to ensure accuracy._")
+                # Part 4: Web search details (if applicable)
+                web_search_result = result.get("web_search_result")
+                if web_search_result and web_search_result.attempts:
+                    parts.append("\n\n**Web Search Details:**")
+                    for attempt in web_search_result.attempts:
+                        parts.append(f"\n**Search Query {attempt.attempt_number}:** `{attempt.query}`")
+                        if attempt.summary:
+                            parts.append(f"**Results Summary:** {attempt.summary}")
+                        if attempt.quality_score is not None:
+                            parts.append(f"**Quality Score:** {attempt.quality_score:.2f}/1.0")
+                        if attempt.retry_reason:
+                            parts.append(f"**Retry Reason:** {attempt.retry_reason}")
+                        if attempt.attempt_number < len(web_search_result.attempts):
+                            parts.append("")  # Add spacing between attempts
                 
                 # Join all parts with newlines for better readability in chat
                 if parts:
@@ -725,13 +867,58 @@ class AgentService:
                     # Build context with document content if available and user is asking for info
                     context = result.get("decision", {}).get("reasoning", "")
                     user_message_lower = request.message.lower()
-                    if project_documents_content and any(keyword in user_message_lower for keyword in ["summarize", "read", "tell me about", "what's in", "show me", "describe"]):
+                    
+                    # Check if user is asking about location/status of documents
+                    is_location_question = any(keyword in user_message_lower for keyword in ["where", "where did", "where is", "where are", "what did you", "what did i"])
+                    
+                    if project_documents_content and any(keyword in user_message_lower for keyword in ["summarize", "read", "tell me about", "what's in", "show me", "describe", "where", "where did", "where is"]):
                         context = f"Project documents:\n{project_documents_content}\n\n{context if context else 'User is asking about the project documents.'}"
+                    
+                    # For location questions, extract recent document operations from chat history
+                    if is_location_question and chat_history_for_llm:
+                        recent_operations = []
+                        # Look at recent messages (last 5) for document operations
+                        for msg in reversed(chat_history_for_llm[-5:]):
+                            role = msg.get("role", "")
+                            if hasattr(role, 'value'):
+                                role = role.value
+                            elif not isinstance(role, str):
+                                role = str(role).lower()
+                            
+                            if role in ["assistant", "system"]:
+                                content = msg.get("content", "")
+                                metadata = msg.get("metadata", {})
+                                decision = metadata.get("decision", {})
+                                
+                                # Check if this message was about creating/editing a document
+                                if decision.get("should_create") or decision.get("should_edit"):
+                                    doc_name = decision.get("document_name") or "a document"
+                                    doc_id = decision.get("document_id")
+                                    action = "created" if decision.get("should_create") else "updated"
+                                    intent = decision.get("intent_statement", f"I {action} {doc_name}")
+                                    
+                                    # Try to get actual document name from database if we have doc_id
+                                    if doc_id:
+                                        try:
+                                            doc = self.document_repo.get_by_id(doc_id)
+                                            if doc:
+                                                doc_name = doc.name
+                                        except Exception:
+                                            pass
+                                    
+                                    recent_operations.append(f"- {intent} (Document: {doc_name})")
+                        
+                        if recent_operations:
+                            context = f"Recent document operations from conversation history:\n" + "\n".join(recent_operations[:3]) + "\n\n" + context
+                    
+                    # Include web search results if available for conversational responses
+                    web_search_results_for_conversation = result.get("web_search_results")
                     
                     agent_response_content = await self.llm_service.generate_conversational_response(
                         request.message,
                         context,
-                        chat_history=chat_history_for_llm
+                        chat_history=chat_history_for_llm,
+                        web_search_results=web_search_results_for_conversation
                     )
             
             # Store agent response
@@ -779,7 +966,10 @@ class AgentService:
                     "pending_confirmation": pending_confirmation,
                     "web_search_performed": result.get("web_search_performed", False),
                     "document_updated": result.get("updated_document") is not None,
-                    "document_created": result.get("created_document") is not None
+                    "document_created": result.get("created_document") is not None,
+                    "intent_statement": decision.get("intent_statement"),
+                    "change_summary": decision.get("change_summary"),
+                    "content_summary": decision.get("content_summary")
                 }
             ))
             

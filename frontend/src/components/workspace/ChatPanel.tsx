@@ -32,12 +32,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [optimisticMessages, setOptimisticMessages] = useState<Array<{id: string, content: string, role: MessageRole, created_at: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Update local chatId when prop changes
+  // Update local chatId when prop changes (including when it becomes null)
   useEffect(() => {
-    if (chatId !== null) {
-      setLocalChatId(chatId);
-    }
+    setLocalChatId(chatId);
+    // Clear optimistic messages when chat changes
+    setOptimisticMessages([]);
   }, [chatId]);
+
+  // Reset chat state when project changes
+  useEffect(() => {
+    setLocalChatId(null);
+    setOptimisticMessages([]);
+    setInputValue("");
+  }, [project?.id]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
