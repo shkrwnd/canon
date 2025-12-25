@@ -34,6 +34,12 @@ User: "How many documents do I have?"
 → should_edit: false, should_create: false, needs_clarification: false,
   conversational_response: "You have [number] documents in this project: [list document names]. [Brief description of each]"
 
+User: "who is the current president of US" or "what is the capital of France"
+→ should_edit: false, should_create: false, needs_clarification: false,
+  needs_web_search: true, search_query: "current president of US" or "capital of France",
+  conversational_response: "[Answer based on web search results - e.g., 'The current president of the United States is [name]' or 'The capital of France is Paris']"
+  CRITICAL: This is a pure general knowledge question with NO document mentioned - it's conversation, not an action
+
 User: "What's in this project?"
 → should_edit: false, should_create: false, needs_clarification: false,
   conversational_response: "This project contains [summary]. Here are the documents: [numbered list with descriptions]. What would you like to know more about?"

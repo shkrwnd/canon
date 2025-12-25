@@ -85,9 +85,17 @@ User: "{user_message}"
 
 Intent types:
 - "conversation": Questions, greetings, info requests (no document action)
-  Examples: "what is", "tell me about", "how do I", "explain", "where did", "where is", "where are"
-  CRITICAL: Questions are ALWAYS conversation, even if they contain action words
-  Examples of questions: "where did you make the changes", "what did you create", "how do I save", "where is the script"
+  Examples: "what is", "who is", "tell me about", "how do I", "explain", "where did", "where is", "where are"
+  CRITICAL: Understand the user's INTENT:
+    * Pure questions (seeking information, no action requested) → conversation
+      Examples: "who is the current president", "what is Python", "when did X happen"
+      These are just questions - user wants an answer, not a document action
+    * Questions disguised as actions (user wants you to DO something) → edit/create
+      Examples: "add X to document" (action word + document reference)
+      These contain action words AND reference documents - user wants an action
+  CRITICAL: If user asks a general knowledge question with NO document mentioned → conversation
+  CRITICAL: Questions are ALWAYS conversation UNLESS they explicitly mention a document AND contain action words
+  Examples of questions: "where did you make the changes", "what did you create", "how do I save", "where is the script", "who is the current president"
   
 - "edit": Modify existing doc (action words: add, update, change, remove, edit, delete, save, put)
   Examples: "add X", "update Y", "save it", "save that", "put this in", "change Z"
@@ -107,11 +115,15 @@ Intent types:
   Examples: "do something", "fix it" (unclear what)
 
 Key patterns:
-- Questions (what/where/when/how/why/did you/is it/are you) → conversation (ALWAYS, even with action words)
+- Pure questions (no document mentioned, no action words) → conversation (ALWAYS)
+  Examples: "who is the current president", "what is the capital of France", "when did X happen"
+  These are information-seeking questions with no document context
+- Questions (what/where/when/how/why/who/did you/is it/are you) → conversation (ALWAYS, unless document + action word)
+  If question mentions a document AND has action words → check if it's an action request
 - "create a [noun]" → create (e.g., "create a script", "create a plan")
 - "save it/that/this" → edit (save content to document)
-- "add/update/change [content]" → edit
-- "Edit [document] and add/update/change [X]" → edit (ALWAYS, even if document name is mentioned)
+- "add/update/change [content]" → edit (if document context exists)
+- "Edit [document] and add/update/change [X]" → edit (ALWAYS, document name is mentioned)
 - "Add [X] to [document]" → edit (ALWAYS, document name is explicitly mentioned)
 - Confirmation responses ("yes", "ok", "proceed", "go ahead", "sure", "yeah", "yep") → Check recent conversation:
   * If agent asked "Should I proceed with [edit/change/update]?" or similar → edit
@@ -171,8 +183,12 @@ User: "{user_message}"
             sections.append("""
 === CONVERSATION RESPONSE ===
 Provide helpful response:
+- General knowledge questions (not about documents): Use web search if needed, provide direct answer
+  * "who is the current president" → needs_web_search: true, search_query: "current president of US"
+  * "what is the capital of France" → needs_web_search: true, search_query: "capital of France"
+  * Answer directly based on web search results or your knowledge
 - Greetings: Include project summary + doc list
-- Questions: Answer based on doc content and conversation history
+- Questions about documents: Answer based on doc content and conversation history
   * "where did you make/create/save" → Tell user which document was created/updated
   * "what did you do" → Explain what action was taken
   * "how do I" → Provide instructions
@@ -269,6 +285,9 @@ FORBIDDEN: Don't ask if info exists in docs or can be inferred.
         common = """
 === WEB SEARCH ===
 ALWAYS search for:
+- General knowledge questions (not about documents): "who is", "what is", "when did", "where is" (current information)
+  Examples: "who is the current president", "what is the capital of France", "when did X happen"
+  These are pure information-seeking questions that need current/accurate answers
 - "latest", "current", "new version", "recent", "up-to-date", "2024", "2025" (version numbers, release dates)
 - "latest [thing]" (e.g., "latest Python version", "latest React features")
 - "current [thing]" (e.g., "current prices", "current best practices")
@@ -346,6 +365,12 @@ Field Rules:
   * For "save it" → extract content from conversation history (previous agent response)
 - edit_scope: "selective" for small changes including "save it", "full" for large
 - content_summary: Required if should_edit or should_create (describe what was/will be added)
+  * Use first-person active voice WITHOUT pronouns ("I", "we", "the agent")
+  * Start with action verbs: "Added...", "Updated...", "Created...", "Expanded...", "Included..."
+  * DO NOT use third person: "The document now includes..." ❌
+  * DO NOT use first person with pronouns: "I added..." or "We created..." ❌
+  * CORRECT: "Added a section discussing backward compatibility with CUDA drivers..." ✅
+  * CORRECT: "Created a new document with sections on..." ✅
 """
         
         # Examples (compressed - limit to 2000 chars)
@@ -496,7 +521,7 @@ Provide a clear answer:
 - If you see "Recent document operations" in context, use that information
 - If web search results are provided, use them to provide accurate, up-to-date information
 
-Answer:"""
+Answer: Provide the information directly. If including a closing statement (e.g., "If you have any more questions..."), add 2-3 blank lines BEFORE the closing statement to visually separate the answer from the pleasantry."""
         else:
             return f"""Helpful assistant for document management.
 
@@ -506,4 +531,14 @@ User: "{user_message}"
 Context: Use conversation history for follow-ups ("yeah", "yes", "do it" refer to previous messages).
 If web search results are provided, use them to answer questions with accurate, current information.
 
-Response: Helpful, friendly, concise. For "summarize" or "read", provide content summary in chat."""
+Response: Helpful, friendly, concise. For "summarize" or "read", provide content summary in chat.
+
+CRITICAL - Formatting for closing statements:
+- If you include a closing pleasantry (e.g., "If you have any more questions...", "Feel free to ask!", etc.)
+- Add 2-3 blank lines (line breaks) BEFORE the closing statement
+- This visually separates the actual information from the closing pleasantry
+- Example format:
+  [Actual answer/information]
+  
+  
+  If you have any more questions or need assistance with something else, feel free to ask!"""
