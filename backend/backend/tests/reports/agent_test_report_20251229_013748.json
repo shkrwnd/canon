@@ -1,0 +1,596 @@
+{
+  "timestamp": "2025-12-29T01:37:48.123846",
+  "total_tests": 24,
+  "passed_tests": 19,
+  "failed_tests": 5,
+  "summary": {
+    "pass_rate": 79.16666666666666,
+    "category_stats": {
+      "intent_classification": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0
+      },
+      "web_search_trigger": {
+        "total": 4,
+        "passed": 3,
+        "failed": 1
+      },
+      "document_operations": {
+        "total": 5,
+        "passed": 2,
+        "failed": 3
+      },
+      "conversational_response": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "error_handling": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "intent_ambiguity": {
+        "total": 2,
+        "passed": 1,
+        "failed": 1
+      }
+    },
+    "average_execution_time": 10.276340613762537
+  },
+  "results": [
+    {
+      "test_name": "General Knowledge Question - Current Info",
+      "category": "intent_classification",
+      "description": "Should classify as conversation and trigger web search, not say 'I will search'",
+      "message": "who is the current president of US",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.486127853393555,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current president of the United States is Donald John Trump. He was sworn into office on January 20, 2025. \n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "General Knowledge Question - Historical",
+      "category": "intent_classification",
+      "description": "Should classify as conversation and trigger web search",
+      "message": "who was the first president of US",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 7.999708890914917,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "George Washington was the first president of the United States, having been unanimously elected by all 69 presidential electors on February 4, 1789. \n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Question with Action Word - Location",
+      "category": "intent_classification",
+      "description": "Should classify as conversation (question), not edit action",
+      "message": "where did you make the changes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.317250967025757,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "No changes have been made as there are currently no documents in the Agent Test Project. If you need assistance with creating or updating documents, just let me know!"
+    },
+    {
+      "test_name": "Confirmation Response - Yes",
+      "category": "intent_classification",
+      "description": "Should handle confirmation based on previous context",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 3.7225239276885986,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Is there something specific you would like to discuss or work on regarding the Agent Test Project? I'm here to help!"
+    },
+    {
+      "test_name": "Create Script Request",
+      "category": "intent_classification",
+      "description": "Should classify as create, not conversation",
+      "message": "create a script for that",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 6.899383068084717,
+      "expected": {
+        "intent": "create",
+        "web_search": null,
+        "should_edit": false,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "User requested to create a script for the project.\n\n\n**Document Content Summary:**\nThe new 'Script' document outlines the project's introduction, objectives, methodology, timeline, and conclusion, providing a comprehensive guide for execution."
+    },
+    {
+      "test_name": "Save It Request",
+      "category": "intent_classification",
+      "description": "Should classify as edit (save action), not conversation",
+      "message": "save it",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.905579805374146,
+      "expected": {
+        "intent": "edit",
+        "web_search": null,
+        "should_edit": true,
+        "should_create": false
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "save it\n\n\n**Content Summary:**\nSaved the existing content of the Script document, which outlines the key objectives and steps required for successful execution of the Agent Test Project."
+    },
+    {
+      "test_name": "Latest Information Request - Edit",
+      "category": "web_search_trigger",
+      "description": "Should trigger web search even for 'make verbose' if document is about 'latest'",
+      "message": "edit the document about the latest Python features to be more verbose",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 9.297547101974487,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": "Should edit mismatch: expected True, got False",
+      "response_preview": "Python 3.14, released on October 7, 2025, introduces several significant improvements and features that enhance the development experience. Notably, this version includes faster startup and import times achieved through deferred annotations, which reduce overhead. It also adds a native task keyword, simplifying the management of asynchronous jobs by eliminating the need for juggling external scheduling tools like cron or APScheduler. Furthermore, Python 3.14 brings new capabilities such as t-str"
+    },
+    {
+      "test_name": "Latest Information Request - Add",
+      "category": "web_search_trigger",
+      "description": "Should trigger web search for 'latest' information",
+      "message": "add the latest Python version to the Python Guide document",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 10.826879978179932,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add the latest Python version to the Python Guide document.\n\n\n**Content Summary:**\nThe document will be updated to include the most recent version of Python, ensuring it reflects current standards and practices.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. It is currently the most up-to-date version, while Python 3.13.5 has also been "
+    },
+    {
+      "test_name": "Current Year Query",
+      "category": "web_search_trigger",
+      "description": "Should trigger web search and infer most recent December",
+      "message": "what are the latest US administration changes in December",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 16.878201961517334,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest changes in the US administration in December 2025 include President Donald Trump signing an executive order on December 18, 2025, titled \"Ensuring American Space Superiority.\" This executive order establishes a strategic framework aimed at maintaining U.S. leadership in space, accelerating lunar and deep-space efforts, and strengthening national security interests. Additionally, the order directs government bodies to review and reform the acquisition process and urges a review of spec"
+    },
+    {
+      "test_name": "Month-Only Query",
+      "category": "web_search_trigger",
+      "description": "Should trigger web search and infer most recent January",
+      "message": "what happened in January",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.795990943908691,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "In January 2025, several significant events occurred, including: \n\n- A man drove his car into a crowd of people on January 1, killing 15 innocent people.\n- On January 10, US President-elect Donald Trump was sentenced by a federal NY court to no punishment after being convicted of falsifying business records in a hush money case.\n- On January 20, Trump was inaugurated as the 47th President of the United States, where he issued pardons to over 1500 supporters charged in connection with the January"
+    },
+    {
+      "test_name": "Edit Existing Document",
+      "category": "document_operations",
+      "description": "Should successfully edit an existing document",
+      "message": "edit the Python Guide and add information about data types",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 18.468677759170532,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add information about data types to the Python Guide.\n\n\n**Content Summary:**\nThe addition will include the latest data types introduced in Python 3.14, along with examples and usage guidelines.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python data types 2025`\n**Results Summary:** In 2025, Python will see the release of Pandas 3.0, introducing new features such as strings as a data type and copy-on-write behavior. Additionally, resources are available for beginners "
+    },
+    {
+      "test_name": "Edit Non-Existent Document",
+      "category": "document_operations",
+      "description": "Should handle gracefully when document doesn't exist",
+      "message": "edit the document called NonExistentDoc and add new content",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 4.466304063796997,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": "Should edit mismatch: expected True, got False",
+      "response_preview": "The document 'NonExistentDoc' does not exist in the project. Please check the document name or provide a different request."
+    },
+    {
+      "test_name": "Create Duplicate Document",
+      "category": "document_operations",
+      "description": "Should handle duplicate document name gracefully (may suggest edit instead)",
+      "message": "create a document called TestDoc",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 14.73093318939209,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Should create mismatch: expected True, got False",
+      "response_preview": "Save the script content\n\n\n**Content Summary:**\nThis script outlines the key objectives and steps required for successful execution, including sections on Introduction, Objectives, Methodology, Timeline, and Conclusion."
+    },
+    {
+      "test_name": "Vague Edit Request",
+      "category": "document_operations",
+      "description": "Should handle vague requests (may need clarification)",
+      "message": "update it",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 24.675683975219727,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested an update to the document.\n\n\n**Content Summary:**\nUpdated the document to reflect the latest Python version and enhancements. A web search will ensure the most current information is included.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major version of Python, 3.14, was released on October 7, 2025, and is currently the main branch for new features, while Python 3.13.5 is also notable for its optimizations. The Python"
+    },
+    {
+      "test_name": "Edit with Web Search - Source Links",
+      "category": "document_operations",
+      "description": "Should include source links when web search is performed",
+      "message": "edit the Python Guide and add the latest Python version",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 18.493921041488647,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "User requested to add the latest Python version to the document.\n\n\n**Content Summary:**\nThe document currently mentions Python 3.14, which was released on October 7, 2025. The latest version needs to be confirmed and updated.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. This version introduces several key features and enhancements, while the previous v"
+    },
+    {
+      "test_name": "Greeting",
+      "category": "conversational_response",
+      "description": "Should respond conversationally without web search",
+      "message": "hi",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 1.6785888671875,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi there! How can I assist you today?"
+    },
+    {
+      "test_name": "Question About Documents",
+      "category": "conversational_response",
+      "description": "Should answer about documents without web search",
+      "message": "what documents do I have",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.695421934127808,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "You have one document in your Agent Test Project: Script. This document serves as a comprehensive guide detailing essential objectives and procedural steps for successful implementation. It includes sections on Introduction, Objectives, Methodology, Timeline, and Conclusion, along with information on the latest Python version and data types in Python."
+    },
+    {
+      "test_name": "Question About Document Content",
+      "category": "conversational_response",
+      "description": "Should answer about document content without web search",
+      "message": "what's in the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.199720144271851,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The Python Guide in the Script document includes information about various built-in data types in Python, such as Numeric Types (int, float, complex), Text Type (str), and Boolean Type (bool). It emphasizes the importance of understanding these data types for efficient programming. If you need more specific details or sections explained, feel free to ask!"
+    },
+    {
+      "test_name": "Multi-Turn Question",
+      "category": "conversational_response",
+      "description": "Should use context from previous messages",
+      "message": "when was he born",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 10.957357168197632,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "John Dalton was born on September 6, 1766, in Eaglesfield, England.  \n\n\nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Empty Message",
+      "category": "error_handling",
+      "description": "Should handle empty message gracefully",
+      "message": "",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.005215167999268,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi! How can I help with your Agent Test Project? This project contains information about essential objectives and procedural steps for successful implementation. Here are the documents in this project:\n1. Script - A comprehensive guide detailing the project's objectives, methodology, timeline, and conclusion.\nWhat would you like to work on?"
+    },
+    {
+      "test_name": "Very Long Message",
+      "category": "error_handling",
+      "description": "Should handle very long messages",
+      "message": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.6403419971466064,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi! How can I help with your Agent Test Project? This project contains a comprehensive guide with sections on objectives, methodology, and more. What would you like to work on?"
+    },
+    {
+      "test_name": "Special Characters",
+      "category": "error_handling",
+      "description": "Should handle special characters",
+      "message": "!@#$%^&*()_+-=[]{}|;':\",./<>?",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 3.833777904510498,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "It seems like you've entered a string of special characters. How can I assist you with your Agent Test Project today?"
+    },
+    {
+      "test_name": "Ambiguous Request - Could Be Edit or Create",
+      "category": "intent_ambiguity",
+      "description": "Should resolve ambiguity in favor of create",
+      "message": "make a new document about Python",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 37.38870096206665,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Should create mismatch: expected True, got False",
+      "response_preview": "I rewrote the document but validation found issues:\n- Lost 1 sections (20.0% of document): TestDoc. This suggests content was accidentally removed.\n\nI can retry with fixes. Should I proceed?"
+    },
+    {
+      "test_name": "Question with Document Reference",
+      "category": "intent_ambiguity",
+      "description": "Should classify as conversation (question), not edit",
+      "message": "what's in the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.268336057662964,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": false,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The Python Guide document contains essential information regarding Python data types, including numeric types like integers and floats, text types such as strings, and boolean types. It also provides insights into the latest Python version, which is 3.14, released on October 7, 2025. Would you like to know more about a specific section?"
+    }
+  ]
+}

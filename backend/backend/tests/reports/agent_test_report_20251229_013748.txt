@@ -1,0 +1,173 @@
+================================================================================
+AGENT EDGE CASE TEST REPORT
+================================================================================
+
+Timestamp: 2025-12-29T01:37:48.123846
+Total Tests: 24
+Passed: 19 (79.2%)
+Failed: 5
+Average Execution Time: 10.28s
+
+Category Breakdown:
+--------------------------------------------------------------------------------
+intent_classification          6/6 passed (100.0%)
+web_search_trigger             3/4 passed (75.0%)
+document_operations            2/5 passed (40.0%)
+conversational_response        4/4 passed (100.0%)
+error_handling                 3/3 passed (100.0%)
+intent_ambiguity               1/2 passed (50.0%)
+
+Failed Tests:
+--------------------------------------------------------------------------------
+
+✗ Latest Information Request - Edit
+  Category: web_search_trigger
+  Message: edit the document about the latest Python features to be more verbose
+  Status: 200
+  Error: Should edit mismatch: expected True, got False
+  Response Preview: Python 3.14, released on October 7, 2025, introduces several significant improvements and features that enhance the development experience. Notably, this version includes faster startup and import tim...
+
+✗ Edit Non-Existent Document
+  Category: document_operations
+  Message: edit the document called NonExistentDoc and add new content
+  Status: 200
+  Error: Should edit mismatch: expected True, got False
+  Response Preview: The document 'NonExistentDoc' does not exist in the project. Please check the document name or provide a different request....
+
+✗ Create Duplicate Document
+  Category: document_operations
+  Message: create a document called TestDoc
+  Status: 200
+  Error: Should create mismatch: expected True, got False
+  Response Preview: Save the script content
+
+
+**Content Summary:**
+This script outlines the key objectives and steps required for successful execution, including sections on Introduction, Objectives, Methodology, Timelin...
+
+✗ Edit with Web Search - Source Links
+  Category: document_operations
+  Message: edit the Python Guide and add the latest Python version
+  Status: 200
+  Error: Expected content not found: '## Sources'
+  Response Preview: User requested to add the latest Python version to the document.
+
+
+**Content Summary:**
+The document currently mentions Python 3.14, which was released on October 7, 2025. The latest version needs to ...
+
+✗ Ambiguous Request - Could Be Edit or Create
+  Category: intent_ambiguity
+  Message: make a new document about Python
+  Status: 200
+  Error: Should create mismatch: expected True, got False
+  Response Preview: I rewrote the document but validation found issues:
+- Lost 1 sections (20.0% of document): TestDoc. This suggests content was accidentally removed.
+
+I can retry with fixes. Should I proceed?...
+
+================================================================================
+All Test Results:
+================================================================================
+
+✓ General Knowledge Question - Current Info
+   Category: intent_classification
+   Execution Time: 8.49s
+
+✓ General Knowledge Question - Historical
+   Category: intent_classification
+   Execution Time: 8.00s
+
+✓ Question with Action Word - Location
+   Category: intent_classification
+   Execution Time: 5.32s
+
+✓ Confirmation Response - Yes
+   Category: intent_classification
+   Execution Time: 3.72s
+
+✓ Create Script Request
+   Category: intent_classification
+   Execution Time: 6.90s
+
+✓ Save It Request
+   Category: intent_classification
+   Execution Time: 8.91s
+
+✗ Latest Information Request - Edit
+   Category: web_search_trigger
+   Execution Time: 9.30s
+   Error: Should edit mismatch: expected True, got False
+
+✓ Latest Information Request - Add
+   Category: web_search_trigger
+   Execution Time: 10.83s
+
+✓ Current Year Query
+   Category: web_search_trigger
+   Execution Time: 16.88s
+
+✓ Month-Only Query
+   Category: web_search_trigger
+   Execution Time: 9.80s
+
+✓ Edit Existing Document
+   Category: document_operations
+   Execution Time: 18.47s
+
+✗ Edit Non-Existent Document
+   Category: document_operations
+   Execution Time: 4.47s
+   Error: Should edit mismatch: expected True, got False
+
+✗ Create Duplicate Document
+   Category: document_operations
+   Execution Time: 14.73s
+   Error: Should create mismatch: expected True, got False
+
+✓ Vague Edit Request
+   Category: document_operations
+   Execution Time: 24.68s
+
+✗ Edit with Web Search - Source Links
+   Category: document_operations
+   Execution Time: 18.49s
+   Error: Expected content not found: '## Sources'
+
+✓ Greeting
+   Category: conversational_response
+   Execution Time: 1.68s
+
+✓ Question About Documents
+   Category: conversational_response
+   Execution Time: 4.70s
+
+✓ Question About Document Content
+   Category: conversational_response
+   Execution Time: 5.20s
+
+✓ Multi-Turn Question
+   Category: conversational_response
+   Execution Time: 10.96s
+
+✓ Empty Message
+   Category: error_handling
+   Execution Time: 4.01s
+
+✓ Very Long Message
+   Category: error_handling
+   Execution Time: 4.64s
+
+✓ Special Characters
+   Category: error_handling
+   Execution Time: 3.83s
+
+✗ Ambiguous Request - Could Be Edit or Create
+   Category: intent_ambiguity
+   Execution Time: 37.39s
+   Error: Should create mismatch: expected True, got False
+
+✓ Question with Document Reference
+   Category: intent_ambiguity
+   Execution Time: 5.27s
+
