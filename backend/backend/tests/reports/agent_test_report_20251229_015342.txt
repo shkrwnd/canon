@@ -1,0 +1,150 @@
+================================================================================
+AGENT EDGE CASE TEST REPORT
+================================================================================
+
+Timestamp: 2025-12-29T01:53:42.660642
+Total Tests: 24
+Passed: 21 (87.5%)
+Failed: 3
+Average Execution Time: 9.66s
+
+Category Breakdown:
+--------------------------------------------------------------------------------
+intent_classification          5/6 passed (83.3%)
+web_search_trigger             4/4 passed (100.0%)
+document_operations            3/5 passed (60.0%)
+conversational_response        4/4 passed (100.0%)
+error_handling                 3/3 passed (100.0%)
+intent_ambiguity               2/2 passed (100.0%)
+
+Failed Tests:
+--------------------------------------------------------------------------------
+
+✗ Confirmation Response - Yes
+  Category: intent_classification
+  Message: yes
+  Status: 200
+  Error: Intent mismatch: expected 'conversation', got 'edit'
+  Response Preview: It seems like you're affirming something. How can I assist you further with your project?...
+
+✗ Create Duplicate Document
+  Category: document_operations
+  Message: create a document called TestDoc
+  Status: 200
+  Error: Should edit mismatch: expected True, got False; Should create mismatch: expected False, got True
+  Response Preview: Create a new document called TestDoc....
+
+✗ Edit with Web Search - Source Links
+  Category: document_operations
+  Message: edit the Python Guide and add the latest Python version
+  Status: 200
+  Error: Expected content not found: '## Sources'
+  Response Preview: User requested to edit the Python Guide and add the latest Python version.
+
+
+**Content Summary:**
+The document will be updated to include the most recent version of Python, ensuring that it reflects t...
+
+================================================================================
+All Test Results:
+================================================================================
+
+✓ General Knowledge Question - Current Info
+   Category: intent_classification
+   Execution Time: 8.53s
+
+✓ General Knowledge Question - Historical
+   Category: intent_classification
+   Execution Time: 9.27s
+
+✓ Question with Action Word - Location
+   Category: intent_classification
+   Execution Time: 4.96s
+
+✗ Confirmation Response - Yes
+   Category: intent_classification
+   Execution Time: 4.32s
+   Error: Intent mismatch: expected 'conversation', got 'edit'
+
+✓ Create Script Request
+   Category: intent_classification
+   Execution Time: 6.00s
+
+✓ Save It Request
+   Category: intent_classification
+   Execution Time: 5.79s
+
+✓ Latest Information Request - Edit
+   Category: web_search_trigger
+   Execution Time: 18.00s
+
+✓ Latest Information Request - Add
+   Category: web_search_trigger
+   Execution Time: 17.03s
+
+✓ Current Year Query
+   Category: web_search_trigger
+   Execution Time: 13.47s
+
+✓ Month-Only Query
+   Category: web_search_trigger
+   Execution Time: 11.63s
+
+✓ Edit Existing Document
+   Category: document_operations
+   Execution Time: 24.87s
+
+✓ Edit Non-Existent Document
+   Category: document_operations
+   Execution Time: 5.26s
+
+✗ Create Duplicate Document
+   Category: document_operations
+   Execution Time: 3.95s
+   Error: Should edit mismatch: expected True, got False; Should create mismatch: expected False, got True
+
+✓ Vague Edit Request
+   Category: document_operations
+   Execution Time: 23.79s
+
+✗ Edit with Web Search - Source Links
+   Category: document_operations
+   Execution Time: 21.50s
+   Error: Expected content not found: '## Sources'
+
+✓ Greeting
+   Category: conversational_response
+   Execution Time: 1.50s
+
+✓ Question About Documents
+   Category: conversational_response
+   Execution Time: 4.57s
+
+✓ Question About Document Content
+   Category: conversational_response
+   Execution Time: 4.57s
+
+✓ Multi-Turn Question
+   Category: conversational_response
+   Execution Time: 9.87s
+
+✓ Empty Message
+   Category: error_handling
+   Execution Time: 4.96s
+
+✓ Very Long Message
+   Category: error_handling
+   Execution Time: 16.34s
+
+✓ Special Characters
+   Category: error_handling
+   Execution Time: 3.63s
+
+✓ Ambiguous Request - Could Be Edit or Create
+   Category: intent_ambiguity
+   Execution Time: 4.22s
+
+✓ Question with Document Reference
+   Category: intent_ambiguity
+   Execution Time: 3.75s
+

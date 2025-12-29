@@ -101,6 +101,22 @@ User: "edit the document about the latest Python features to be more verbose"
   intent_statement: "I'll expand the document about latest Python features with more detailed information",
   change_summary: "Expanding document with more verbose descriptions of latest Python features",
   content_summary: "Expanded the document with more detailed explanations of the latest Python features, including comprehensive descriptions, use cases, and examples. All information verified with current web search results. Sources section included with all reference URLs."
+  CRITICAL: "edit the document about [topic]" ALWAYS means edit, even if document name is vague
+
+User: "edit the document called NonExistentDoc and add new content"
+→ should_edit: true, should_create: false, document_id: null (document doesn't exist, but intent is clear),
+  intent_statement: "I'll edit the document called NonExistentDoc and add new content",
+  change_summary: "Adding new content to NonExistentDoc",
+  content_summary: "Attempted to edit NonExistentDoc, but the document doesn't exist. Please check the document name."
+  CRITICAL: Even if document doesn't exist, if user explicitly says "edit the document called [name]", should_edit: true
+  CRITICAL: "edit the document about [topic]" ALWAYS means edit, even if document name is vague
+
+User: "edit the document called NonExistentDoc and add new content"
+→ should_edit: true, should_create: false, document_id: null (document doesn't exist, but intent is clear),
+  intent_statement: "I'll edit the document called NonExistentDoc and add new content",
+  change_summary: "Adding new content to NonExistentDoc",
+  content_summary: "Attempted to edit NonExistentDoc, but the document doesn't exist. Please check the document name."
+  CRITICAL: Even if document doesn't exist, if user explicitly says "edit the document called [name]", should_edit: true
 
 User: "Add hotels"
 → **First: Analyze project - is this travel-related? Check documents for travel/itinerary content**
@@ -188,6 +204,18 @@ User: "Make a new document for meeting notes"
     intent_statement: "I'll create a new document called 'Meeting Notes' for your meeting notes",
     change_summary: "Creating new Meeting Notes document",
     content_summary: "Created a new Meeting Notes document with a template structure for [purpose]"
+  - If YES → should_create: true, should_edit: false, document_name: "Meeting Notes 2" or "New Meeting Notes",
+    intent_statement: "I'll create a new document called 'Meeting Notes' (since you said 'new document')",
+    change_summary: "Creating new Meeting Notes document",
+    content_summary: "Created a new Meeting Notes document (numbered to avoid conflict with existing one)"
+  CRITICAL: "make a new document" keywords take PRIORITY - always create, even if similar document exists
+
+User: "make a new document about Python"
+→ should_create: true, should_edit: false, document_name: "Python" or "Python Guide",
+  intent_statement: "I'll create a new document about Python",
+  change_summary: "Creating new document about Python",
+  content_summary: "Created a new document about Python with [content description]"
+  CRITICAL: "make a new document" = create (ALWAYS), don't edit existing documents even if topic matches
 
 User: "Start a new document called Budget Tracker"
 → **First check: Does a document named "Budget Tracker" exist in PROJECT DOCUMENTS?**

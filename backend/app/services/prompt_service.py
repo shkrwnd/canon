@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -102,13 +103,18 @@ Intent types:
   Examples: "add X", "update Y", "save it", "save that", "put this in", "change Z"
   CRITICAL: "save it" or "save that" = edit (save content to document)
   CRITICAL: "Edit [document] and add/update/change [X]" = edit (e.g., "Edit the Python guide and add latest version")
+  CRITICAL: "edit the document about [topic]" = edit (e.g., "edit the document about the latest Python features")
+  CRITICAL: "edit the document called [name]" = edit (e.g., "edit the document called NonExistentDoc")
   CRITICAL: "Add [X] to [document]" = edit (e.g., "Add hotels to the itinerary")
+  CRITICAL: If message starts with "edit" or "Edit" → ALWAYS classify as "edit" (even if document name is vague or doesn't exist)
   NOT questions: "where did you save" = conversation (question), not edit
   CONFIRMATION: If recent conversation shows agent asked for confirmation (e.g., "Should I proceed?", "Shall I make the changes?") and user says "yes"/"ok"/"proceed"/"go ahead"/"sure" → edit
   
 - "create": Create new doc (words: create, make, new document, script, outline, plan)
   Examples: "create a script", "create a [thing]", "make a new [thing]", "write a script"
   CRITICAL: "create a script" or "create a [noun]" = create (new document)
+  CRITICAL: "make a new document" or "make a new [thing]" = create (ALWAYS, even if similar document exists)
+  CRITICAL: "new document" keywords take priority over content matching - if user says "make a new document", it's create, not edit
   NOT questions: "where did you create" = conversation (question), not create
   CONFIRMATION: If recent conversation shows agent asked for confirmation about creating and user says "yes"/"ok"/"proceed"/"go ahead"/"sure" → create
   
@@ -122,9 +128,12 @@ Key patterns:
 - Questions (what/where/when/how/why/who/did you/is it/are you) → conversation (ALWAYS, unless document + action word)
   If question mentions a document AND has action words → check if it's an action request
 - "create a [noun]" → create (e.g., "create a script", "create a plan")
+- "make a new document" or "make a new [thing]" → create (ALWAYS, prioritize over content matching)
 - "save it/that/this" → edit (save content to document)
 - "add/update/change [content]" → edit (if document context exists)
 - "Edit [document] and add/update/change [X]" → edit (ALWAYS, document name is mentioned)
+- "edit the document about [topic]" → edit (ALWAYS, even if document name is vague)
+- "edit the document called [name]" → edit (ALWAYS, even if document doesn't exist)
 - "Add [X] to [document]" → edit (ALWAYS, document name is explicitly mentioned)
 - Confirmation responses ("yes", "ok", "proceed", "go ahead", "sure", "yeah", "yep") → Check recent conversation:
   * If agent asked "Should I proceed with [edit/change/update]?" or similar → edit
@@ -226,11 +235,16 @@ Special cases:
 Document Resolution:
 1. Name match: User says "update X" → find doc named X (case-insensitive)
 2. Content match: "add hotels" → find travel/itinerary doc
-3. Context: "save it", "add it there" → check conversation history for:
+3. Topic match: "edit the document about [topic]" → find doc with topic in name or content
+   * Example: "edit the document about the latest Python features" → find doc with "latest Python features" or "Python" in name/content
+4. Context: "save it", "add it there" → check conversation history for:
    - Content to save (from previous agent response)
    - Document reference (mentioned earlier)
    - Most recent document if no specific reference
-4. If multiple match → use most relevant
+5. If multiple match → use most relevant
+6. If no match found but user explicitly said "edit the document about [topic]" or "edit the document called [name]" → 
+   * Set should_edit: true, document_id: null (will be handled gracefully)
+   * intent_statement should indicate which document was intended
 
 Edit Scope:
 - "selective": Small changes (heading, section, add to X, save content, improve, update, enhance, make better) → preserve all else
@@ -250,13 +264,20 @@ BEFORE creating:
 1. Infer doc name from request:
    - "create a script" → "Script" or "Video Script"
    - "create a [noun]" → capitalize the noun (e.g., "create a plan" → "Plan")
-   - "make a [noun]" → same as above
-2. Check if doc with that name exists → if yes, EDIT instead
-3. Only create if NO matching name exists
+   - "make a new [noun]" or "make a new document" → capitalize the noun or use "New Document"
+   - "make a new document about [topic]" → use topic as name (e.g., "Python" or "Python Guide")
+2. Check if doc with that name exists → if yes, EDIT instead (UNLESS user explicitly said "new document" - then create with different name)
+3. Only create if NO matching name exists OR user explicitly said "new document"
+
+CRITICAL: "make a new document" or "make a new [thing]" keywords take PRIORITY:
+- If user says "make a new document about Python" → should_create: true (even if "Python" document exists)
+- Create a NEW document, don't edit existing one
+- If name conflict, append number or use topic as name
 
 Document Name:
 - Extract from user message intelligently
 - Patterns: "create a script" → "Script", "create a plan" → "Plan", "create a video script" → "Video Script"
+- "make a new document about [topic]" → use topic as name
 - Capitalize properly ("recipes" → "Recipes", "script" → "Script")
 - REQUIRED if should_create is true
 
@@ -461,32 +482,61 @@ Examples:
         web_search_instructions = ""
         if web_search_results:
             web_search_section = f"\nWeb Search Results:\n{web_search_results}\n"
-            web_search_instructions = """
-MANDATORY - Web Search Source Attribution:
-The web search results above are formatted as:
+            # Extract URLs from web search results for validation
+            import re
+            url_pattern = r'URL:\s*(https?://[^\s\n]+)'
+            urls_found = re.findall(url_pattern, web_search_results)
+            title_pattern = r'Title:\s*([^\n]+)'
+            titles_found = re.findall(title_pattern, web_search_results)
+            
+            # Build sources list for reference
+            sources_list = []
+            for i, url in enumerate(urls_found):
+                title = titles_found[i] if i < len(titles_found) else "Source"
+                sources_list.append(f"- [{title}]({url})")
+            
+            web_search_instructions = f"""
+================================================================================
+MANDATORY - Web Search Source Attribution (CRITICAL - DO NOT SKIP):
+================================================================================
+Web search results have been provided above. You MUST include source attribution.
+
+The web search results are formatted as:
 Title: [Title]
 URL: [URL]
 Content: [Content]
 ---
 
-YOU MUST:
+REQUIRED STEPS (YOU MUST DO THIS):
 1. Find ALL "URL:" lines in the web search results above
 2. Extract the Title from the line immediately before each URL
 3. Add a "## Sources" section at the VERY END of the document (after all other content)
 4. Format each source as: - [Title](URL)
 5. Include ALL URLs from the web search results, even if you only used part of the content
 
-Example - If web search results contain:
-Title: Python 3.13 Release Notes
-URL: https://docs.python.org/3.13/whatsnew/
-Content: ...
-
-Then your document MUST end with:
+Expected Sources Section Format:
 ## Sources
-- [Python 3.13 Release Notes](https://docs.python.org/3.13/whatsnew/)
+{sources_list[0] if sources_list else "- [Source Title](URL)"}
+{sources_list[1] if len(sources_list) > 1 else ""}
+{sources_list[2] if len(sources_list) > 2 else ""}
+{sources_list[3] if len(sources_list) > 3 else ""}
+{sources_list[4] if len(sources_list) > 4 else ""}
 
-CRITICAL: The document output MUST end with a "## Sources" section containing all URLs from the web search results.
-If you skip this, the document is incomplete.
+CRITICAL RULES:
+- The document output MUST end with a "## Sources" section
+- The Sources section MUST be the last thing in the document
+- You MUST include ALL URLs from the web search results
+- DO NOT skip this step - it is mandatory
+- If you skip this, the document is incomplete and invalid
+
+VALIDATION: Before returning your response, check that your document ends with:
+## Sources
+- [Title](URL)
+- [Title](URL)
+...
+
+If it doesn't, add it now.
+================================================================================
 """
         
         # Build validation errors section if present

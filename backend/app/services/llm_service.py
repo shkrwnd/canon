@@ -219,10 +219,15 @@ class LLMService:
             user_message, standing_instruction, current_content, web_search_results, edit_scope, validation_errors
         )
         
+        # Build system message - emphasize source attribution if web search was performed
+        system_content = "You are an expert editor that rewrites documents based on user intent. Return only the markdown content, no explanations."
+        if web_search_results:
+            system_content += " CRITICAL: If web search results are provided, you MUST add a '## Sources' section at the end of the document with all URLs from the search results."
+        
         messages = [
             {
                 "role": "system",
-                "content": "You are an expert editor that rewrites documents based on user intent. Return only the markdown content, no explanations."
+                "content": system_content
             },
             {"role": "user", "content": prompt}
         ]
@@ -255,7 +260,32 @@ class LLMService:
             
             span.set_attribute("llm.output.content_length", len(content))
             logger.debug(f"Module content rewritten, length: {len(content)}")
-            return content.strip()
+            
+            # Post-processing: Ensure sources are added if web search was performed
+            content = content.strip()
+            if web_search_results:
+                # Check if "## Sources" section exists
+                if "## Sources" not in content and "## sources" not in content:
+                    logger.warning("Sources section missing from document rewrite - adding it")
+                    # Extract URLs and titles from web search results
+                    import re
+                    url_pattern = r'URL:\s*(https?://[^\s\n]+)'
+                    urls = re.findall(url_pattern, web_search_results)
+                    title_pattern = r'Title:\s*([^\n]+)'
+                    titles = re.findall(title_pattern, web_search_results)
+                    
+                    # Build sources section
+                    sources_lines = ["\n\n## Sources"]
+                    for i, url in enumerate(urls):
+                        title = titles[i] if i < len(titles) else "Source"
+                        sources_lines.append(f"- [{title}]({url})")
+                    
+                    content = content + "\n" + "\n".join(sources_lines)
+                    logger.info(f"Added Sources section with {len(urls)} URLs")
+                else:
+                    logger.debug("Sources section found in document rewrite")
+            
+            return content
     
     async def generate_conversational_response(
         self,

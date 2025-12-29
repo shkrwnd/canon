@@ -265,14 +265,15 @@ class AgentTester:
                 message="edit the document called NonExistentDoc and add new content",
                 category="document_operations",
                 expected_should_edit=True,
-                description="Should handle gracefully when document doesn't exist"
+                description="Should recognize edit intent even when document doesn't exist (will handle gracefully)"
             ),
             TestCase(
                 name="Create Duplicate Document",
                 message="create a document called TestDoc",
                 category="document_operations",
-                expected_should_create=True,
-                description="Should handle duplicate document name gracefully (may suggest edit instead)"
+                expected_should_edit=True,  # When duplicate exists, agent should edit instead
+                expected_should_create=False,
+                description="Should recognize duplicate and edit existing document instead of creating"
             ),
             TestCase(
                 name="Vague Edit Request",
@@ -352,7 +353,8 @@ class AgentTester:
                 message="make a new document about Python",
                 category="intent_ambiguity",
                 expected_should_create=True,
-                description="Should resolve ambiguity in favor of create"
+                expected_should_edit=False,
+                description="Should prioritize 'new document' keywords and create, not edit existing documents"
             ),
             TestCase(
                 name="Question with Document Reference",
