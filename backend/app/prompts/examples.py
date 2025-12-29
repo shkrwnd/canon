@@ -83,21 +83,21 @@ User: "Add hotel recommendations to the itinerary"
 
 User: "Edit the Python guide document and add the latest Python version information"
 → should_edit: true, should_create: false, document_id: <python_guide_id>, edit_scope: "selective",
-  needs_web_search: true, search_query: "latest Python version 2024",
+  needs_web_search: true, search_query: "latest Python version [current year]",
   intent_statement: "I'll add the latest Python version information to the Python guide document",
   change_summary: "Adding latest Python version information",
   content_summary: "Added a new section about the latest Python version, including version number, release date, and key new features based on current information from web search. Sources section included with all reference URLs."
 
 User: "Add the current React best practices to the React guide"
 → should_edit: true, should_create: false, document_id: <react_guide_id>, edit_scope: "selective",
-  needs_web_search: true, search_query: "React best practices 2024",
+  needs_web_search: true, search_query: "React best practices [current year]",
   intent_statement: "I'll add current React best practices to the React guide document",
   change_summary: "Adding current React best practices",
-  content_summary: "Added a section on current React best practices for 2024, including modern patterns, hooks usage, and performance optimization techniques based on latest industry standards. Sources section included with all reference URLs."
+  content_summary: "Added a section on current React best practices for [current year], including modern patterns, hooks usage, and performance optimization techniques based on latest industry standards. Sources section included with all reference URLs."
 
 User: "edit the document about the latest Python features to be more verbose"
 → should_edit: true, should_create: false, document_id: <latest_python_features_id>, edit_scope: "selective",
-  needs_web_search: true, search_query: "latest Python features 2024",
+  needs_web_search: true, search_query: "latest Python features [current year]",
   intent_statement: "I'll expand the document about latest Python features with more detailed information",
   change_summary: "Expanding document with more verbose descriptions of latest Python features",
   content_summary: "Expanded the document with more detailed explanations of the latest Python features, including comprehensive descriptions, use cases, and examples. All information verified with current web search results. Sources section included with all reference URLs."

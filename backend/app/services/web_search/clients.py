@@ -32,3 +32,4 @@ class DefaultSearchClient:
         """Perform web search using Tavily"""
         return search_web(query)
 
+

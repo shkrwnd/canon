@@ -93,3 +93,4 @@ agent_settings = AgentSettings()
 logger.info(f"Agent settings loaded: web_search_retry={agent_settings.web_search_retry_enabled}, "
             f"max_retries={agent_settings.web_search_max_retries}")
 
+

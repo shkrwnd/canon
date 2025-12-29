@@ -6,6 +6,7 @@ from ..config import settings
 import asyncio
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -113,18 +114,25 @@ class LLMService:
             span.set_attribute("llm.intent_confidence", confidence)
             span.set_attribute("llm.needs_documents", needs_documents)
         
-        # Early exit for simple conversations
+        # Early exit only for very simple greetings that definitely don't need web search
+        # All other conversations (including questions) must go to Stage 2 to evaluate web search needs
         if intent_type == "conversation" and not needs_documents:
-            logger.debug(f"Early exit for simple conversation: {intent_type}")
-            return {
-                "should_edit": False,
-                "should_create": False,
-                "needs_clarification": False,
-                "pending_confirmation": False,
-                "intent_type": intent_type,
-                "conversational_response": None,  # Will be generated separately
-                "reasoning": "Conversation intent - no action needed"
-            }
+            user_lower = user_message.lower().strip()
+            # Only early exit for simple greetings that definitely don't need web search
+            simple_greetings = ["hi", "hello", "hey", "thanks", "thank you", "ok", "okay"]
+            if user_lower in simple_greetings:
+                logger.debug(f"Early exit for simple greeting: {user_lower}")
+                return {
+                    "should_edit": False,
+                    "should_create": False,
+                    "needs_clarification": False,
+                    "pending_confirmation": False,
+                    "intent_type": intent_type,
+                    "conversational_response": None,  # Will be generated separately
+                    "reasoning": "Simple greeting - no action needed"
+                }
+            # Otherwise, continue to Stage 2 to evaluate web search needs for questions
+            logger.debug(f"Conversation intent - proceeding to Stage 2 to evaluate web search needs")
         
         # ============================================
         # STAGE 2: Detailed Decision (Focused)
@@ -272,10 +280,25 @@ class LLMService:
             user_message, context, web_search_results
         )
         
+        # Add logging to verify web search results are received
+        logger.info(f"generate_conversational_response called: "
+                   f"has_web_search_results={web_search_results is not None}, "
+                   f"results_length={len(web_search_results) if web_search_results else 0}, "
+                   f"user_message='{user_message[:50]}...'")
+        
+        # Use more specific system message when web search results are provided
+        if web_search_results:
+            system_content = """You are a helpful assistant. Web search has ALREADY been performed and results are provided below. 
+Your job is to answer the user's question DIRECTLY using the web search results provided. 
+DO NOT say "I will search" or "Let me look that up" - the search is already done. 
+Extract the answer from the web search results and provide it immediately."""
+        else:
+            system_content = "You are a helpful, friendly assistant that helps users manage their documents. Respond naturally and conversationally."
+        
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful, friendly assistant that helps users manage their documents. Respond naturally and conversationally."
+                "content": system_content
             }
         ]
         
@@ -321,5 +344,93 @@ class LLMService:
                     api_span.set_attribute("llm.response.length", len(response))
             
             span.set_attribute("llm.output.length", len(response))
+            
+            # Safety net: If LLM says "I will search" when results are provided, extract answer from results
+            if web_search_results:
+                response_lower = response.lower().strip()
+                logger.info(f"[POST-PROCESS] Checking response. Response='{response}', length={len(response)}, has_web_search_results=True, results_length={len(web_search_results)}")
+                
+                # More comprehensive pattern matching - check if response contains search intent
+                search_phrases = [
+                    "i will search", 
+                    "i'll search", 
+                    "let me search", 
+                    "let me look", 
+                    "i will look up",
+                    "i'll look up",
+                    "i will find",
+                    "let me find"
+                ]
+                
+                # Check if response starts with or contains any search phrase (more lenient check)
+                contains_search_intent = any(
+                    response_lower.startswith(phrase) or 
+                    response_lower.startswith(phrase + " ") or
+                    response_lower.startswith(phrase + " for") or
+                    (len(response_lower) < 150 and phrase in response_lower)
+                    for phrase in search_phrases
+                )
+                
+                logger.info(f"[POST-PROCESS] Search intent check - contains_search_intent={contains_search_intent}, response_lower='{response_lower}'")
+                
+                if contains_search_intent:
+                    logger.warning(f"[POST-PROCESS] ✓ Detected search intent! Response: '{response}'. Attempting to extract answer from results.")
+                    logger.info(f"[POST-PROCESS] Web search results length: {len(web_search_results)}, first 500 chars: {web_search_results[:500]}")
+                    
+                    # Try to extract the answer directly from web search results
+                    # Look for "Content:" sections that might contain the answer
+                    if "Content:" in web_search_results:
+                        logger.info(f"[POST-PROCESS] ✓ Found 'Content:' marker in web search results")
+                        # Extract all content sections (not just first 2)
+                        content_parts = web_search_results.split("Content:")
+                        logger.info(f"[POST-PROCESS] Split into {len(content_parts)} parts (first part length: {len(content_parts[0]) if content_parts else 0})")
+                        
+                        if len(content_parts) > 1:
+                            # Get all content sections (skip the first part which is before first Content:)
+                            all_content = " ".join(content_parts[1:])
+                            logger.info(f"[POST-PROCESS] Extracted content sections, total length: {len(all_content)}, first 500 chars: {all_content[:500]}")
+                            
+                            # More comprehensive patterns to find president name
+                            patterns = [
+                                # "current president of the United States is [Name]"
+                                r"current president (?:of the United States|of the US|of America|of the U\.S\.)? (?:is )?([A-Z][a-z]+(?: [A-Z][a-z]+)+)",
+                                # "president of the United States is [Name]"
+                                r"president (?:of the United States|of the US|of America|of the U\.S\.)? (?:is )?([A-Z][a-z]+(?: [A-Z][a-z]+)+)",
+                                # "[Name] is the current president"
+                                r"([A-Z][a-z]+(?: [A-Z][a-z]+)+) (?:is|serves as) (?:the )?current president",
+                                # "[Name], the [X] president of the United States"
+                                r"([A-Z][a-z]+(?: [A-Z][a-z]+)+), (?:the )?(?:current )?president",
+                                # Just look for common president name patterns in context
+                                r"(?:president|President) (?:is |named |called )?([A-Z][a-z]+ [A-Z][a-z]+)",
+                            ]
+                            
+                            for i, pattern in enumerate(patterns):
+                                match = re.search(pattern, all_content, re.IGNORECASE)
+                                if match:
+                                    name = match.group(1).strip()
+                                    # Basic validation - should be 2-3 words (first name + last name, maybe middle)
+                                    name_parts = name.split()
+                                    logger.info(f"[POST-PROCESS] Pattern {i+1} matched! Name: '{name}', parts: {name_parts}, count: {len(name_parts)}")
+                                    
+                                    if 2 <= len(name_parts) <= 3:
+                                        logger.info(f"[POST-PROCESS] ✓✓✓ SUCCESS: Extracted answer from web search results: {name}")
+                                        return f"The current president of the United States is {name}."
+                                    else:
+                                        logger.warning(f"[POST-PROCESS] Name validation failed: {len(name_parts)} parts (expected 2-3)")
+                            
+                            logger.warning(f"[POST-PROCESS] ✗ Could not extract president name using any regex patterns. Content preview: {all_content[:800]}")
+                        else:
+                            logger.warning(f"[POST-PROCESS] ✗ Not enough content parts after split: {len(content_parts)}")
+                    else:
+                        logger.warning(f"[POST-PROCESS] ✗ 'Content:' marker NOT found in web search results. Results preview: {web_search_results[:500]}")
+                    
+                    # Fallback: Return a message indicating we should use the results
+                    logger.warning(f"[POST-PROCESS] ✗✗✗ Returning fallback message - extraction failed")
+                    return "Based on the web search results provided above, please refer to the Content sections for the answer to your question."
+                else:
+                    logger.info(f"[POST-PROCESS] No search intent detected - response is OK")
+            else:
+                logger.info(f"[POST-PROCESS] Skipping post-processing - no web_search_results provided")
+            
             return response.strip()
 

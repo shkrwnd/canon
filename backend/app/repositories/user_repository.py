@@ -15,3 +15,4 @@ class UserRepository(BaseRepository[User]):
         return self.db.query(User).filter(User.email == email).first()
 
 
+

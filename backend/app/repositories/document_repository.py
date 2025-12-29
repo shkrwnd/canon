@@ -51,3 +51,4 @@ class DocumentRepository(BaseRepository[Document]):
         return query.first() is not None
 
 
+

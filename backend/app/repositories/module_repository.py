@@ -39,3 +39,4 @@ class ModuleRepository(BaseRepository[Module]):
         return query.first() is not None
 
 
+

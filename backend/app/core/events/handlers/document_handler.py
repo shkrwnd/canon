@@ -96,3 +96,4 @@ class DocumentEventHandler:
         # Future: Cleanup related data (chats, messages, etc.)
         pass
 
+

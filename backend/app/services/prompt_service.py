@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -152,6 +153,12 @@ Response JSON:
         Stage 2: Generate detailed decision prompt with dynamic sections
         Only includes relevant sections based on intent_type
         """
+        # Get current date information dynamically
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
+        current_date_str = now.strftime('%B %d, %Y')
+        
         documents_list = PromptService._build_compressed_documents_list(documents)
         
         project_info = ""
@@ -161,6 +168,7 @@ Response JSON:
         # Core rules (always included)
         core = f"""You're a document maintainer. Keep docs accurate and structured.
 {project_info}
+Current Date Context: Today is {current_date_str}, current year is {current_year}
 
 Core Rules:
 - Default to CONVERSATION unless explicit action words
@@ -180,13 +188,19 @@ User: "{user_message}"
         sections = []
         
         if intent_type == "conversation":
-            sections.append("""
+            # Pre-calculate most recent December year for this section
+            most_recent_dec = current_year - 1 if current_month < 12 else current_year
+            sections.append(f"""
 === CONVERSATION RESPONSE ===
 Provide helpful response:
 - General knowledge questions (not about documents): Use web search if needed, provide direct answer
-  * "who is the current president" → needs_web_search: true, search_query: "current president of US"
+  * "who is the current president" → needs_web_search: true, search_query: "current president of US {current_year}"
   * "what is the capital of France" → needs_web_search: true, search_query: "capital of France"
+  * "what are the latest US administration changes in December" → needs_web_search: true, search_query: "US administration changes December {most_recent_dec}" (use most recent December based on current date: {current_date_str})
   * Answer directly based on web search results or your knowledge
+  * CRITICAL: When web search results are provided, use SPECIFIC information from the results, not generic/vague answers
+  * Include specific names, dates, events, and details from the web search results
+  * DO NOT give generic answers like "there were some changes" - provide actual specific information
 - Greetings: Include project summary + doc list
 - Questions about documents: Answer based on doc content and conversation history
   * "where did you make/create/save" → Tell user which document was created/updated
@@ -282,13 +296,19 @@ FORBIDDEN: Don't ask if info exists in docs or can be inferred.
 """)
         
         # Common sections (always include)
-        common = """
+        # Calculate most recent December for examples
+        most_recent_december_year = current_year - 1 if current_month < 12 else current_year
+        
+        common = f"""
 === WEB SEARCH ===
 ALWAYS search for:
 - General knowledge questions (not about documents): "who is", "what is", "when did", "where is" (current information)
   Examples: "who is the current president", "what is the capital of France", "when did X happen"
   These are pure information-seeking questions that need current/accurate answers
-- "latest", "current", "new version", "recent", "up-to-date", "2024", "2025" (version numbers, release dates)
+- Questions about recent events/changes: "latest changes", "recent events", "what happened in [month/year]", "latest [thing] changes"
+  Examples: "what are the latest US administration changes", "recent policy changes", "what happened in December" (use most recent December: December {most_recent_december_year})
+  These questions ask about current/recent events that need up-to-date information
+- "latest", "current", "new version", "recent", "up-to-date" (version numbers, release dates)
 - "latest [thing]" (e.g., "latest Python version", "latest React features")
 - "current [thing]" (e.g., "current prices", "current best practices")
 - Safety-critical information, new products, current prices, time-sensitive data
@@ -297,15 +317,23 @@ ALWAYS search for:
 CRITICAL: If editing a document that is ABOUT "latest [thing]" or "current [thing]" (check document name/content):
 - Even if user says "make more verbose", "expand", "improve", "update" → needs_web_search: true
 - Reason: Documents about "latest" topics need current information to ensure accuracy
-- Example: "edit the document about latest Python features" → needs_web_search: true, search_query: "latest Python features 2024"
+- Example: "edit the document about latest Python features" → needs_web_search: true, search_query: "latest Python features {current_year}"
 
 Examples requiring web search:
-- "add the latest Python version" → needs_web_search: true, search_query: "latest Python version 2024"
-- "update with current React best practices" → needs_web_search: true, search_query: "React best practices 2024"
-- "edit the document about latest Python features" → needs_web_search: true, search_query: "latest Python features 2024"
-- "make the latest features doc more verbose" → needs_web_search: true, search_query: "latest Python features 2024"
+- "add the latest Python version" → needs_web_search: true, search_query: "latest Python version {current_year}"
+- "update with current React best practices" → needs_web_search: true, search_query: "React best practices {current_year}"
+- "edit the document about latest Python features" → needs_web_search: true, search_query: "latest Python features {current_year}"
+- "make the latest features doc more verbose" → needs_web_search: true, search_query: "latest Python features {current_year}"
 - "add current Bitcoin price" → needs_web_search: true, search_query: "Bitcoin price today"
 - "what's the latest version" → needs_web_search: true (conversation intent)
+- "what happened in December" → needs_web_search: true, search_query: "US administration changes December {most_recent_december_year}" (use most recent December based on current date: {current_date_str})
+
+CRITICAL - Search Query Generation:
+- When generating search_query, ALWAYS use the current year ({current_year}) unless the user explicitly mentions a different year
+- For month-only queries (e.g., "what happened in December"), infer the most recent occurrence based on current date ({current_date_str})
+- Example: If user asks "what happened in December" and today is January {current_year}, search for "December {current_year - 1}"
+- Example: If user asks "what happened in December" and today is December {current_year}, search for "December {current_year}"
+- Example: If user asks "what happened in January" and today is March {current_year}, search for "January {current_year}" (most recent)
 
 Never search: Stable knowledge (e.g., "how to write a function"), creative content, user's personal notes
 
@@ -314,7 +342,7 @@ Set pending_confirmation: true for delete, remove, clear, large structural chang
 
 === RESPONSE FORMAT ===
 JSON response:
-{
+{{
     "should_edit": boolean,
     "should_create": boolean,
     "document_id": integer|null,
@@ -333,7 +361,7 @@ JSON response:
     "conversational_response": string|null,
     "change_summary": string|null,
     "content_summary": string|null  // 3-5 sentences, 100-200 words
-}
+}}
 
 Field Rules:
 - should_edit: true for explicit edit requests including "save it/that/this"
@@ -354,12 +382,18 @@ Field Rules:
   * "latest", "current", "new version", "recent", "up-to-date", version numbers, release dates
   * "latest [thing]", "current [thing]", "new [thing] version"
   * Time-sensitive information, current prices, real-time data
+  * **General knowledge questions requiring current/real-time information: "who is", "what is", "when did", "where is" (for current info)**
+    - CRITICAL: Questions like "who is the current president" ALWAYS need web search because the answer may have changed
+    - Examples: "who is the current president", "what is the capital of France", "when did X happen" (if asking about recent events)
+    - Pattern: If question asks about CURRENT/REAL-TIME information → needs_web_search: true
   * **OR if the document being edited is ABOUT "latest [thing]" or "current [thing]" (check document name/content)**
-  * Examples: "latest Python version", "current React practices", "new features in 2024"
+  * Examples: "latest Python version", "current React practices", "new features in {current_year}"
   * Example: "edit document about latest Python features" → needs_web_search: true (even if just "make verbose")
 - search_query: Required if needs_web_search: true
-  * Extract the searchable part (e.g., "latest Python version 2024", "current React best practices")
-  * Include version numbers or years if mentioned
+  * Extract the searchable part and ALWAYS include the CURRENT YEAR ({current_year}) unless user explicitly mentions a different year
+  * Examples: "latest Python version {current_year}", "current React best practices {current_year}"
+  * For month-only queries: Use the most recent occurrence (e.g., if today is January {current_year} and user asks about "December", use "December {current_year - 1}")
+  * CRITICAL: Always use {current_year} in search queries unless user explicitly mentions a different year
 - document_content: 
   * For "create a script" → generate the script content here
   * For "save it" → extract content from conversation history (previous agent response)
@@ -496,6 +530,18 @@ Output Requirements:
         """Compressed conversational prompt"""
         user_lower = user_message.lower()
         
+        # Get current date information dynamically
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
+        current_date_str = now.strftime('%B %d, %Y')
+        
+        # Calculate most recent December for example
+        if current_month == 12:
+            most_recent_december = f"December {current_year}"
+        else:
+            most_recent_december = f"December {current_year - 1}"
+        
         # Build web search section separately to avoid f-string backslash issue
         web_search_section = ""
         if web_search_results:
@@ -523,15 +569,65 @@ Provide a clear answer:
 
 Answer: Provide the information directly. If including a closing statement (e.g., "If you have any more questions..."), add 2-3 blank lines BEFORE the closing statement to visually separate the answer from the pleasantry."""
         else:
-            return f"""Helpful assistant for document management.
+            # Build the prompt with web search results prominently displayed
+            prompt_parts = []
+            
+            # Start with web search results if available (most important)
+            if web_search_results:
+                prompt_parts.append(f"""=== WEB SEARCH COMPLETED ===
+A web search has ALREADY been performed. The results are below.
+
+SEARCH RESULTS:
+{web_search_results}
+
+=== YOUR TASK ===
+Read the search results above and answer this question: "{user_message}"
+
+MANDATORY FORMAT:
+- Start your response IMMEDIATELY with the answer
+- Extract the answer from the "Content:" sections in the search results above
+- For "who is" questions, use the EXACT name from the Content sections
+- The search results are MORE CURRENT than your training data (current as of {current_date_str})
+
+DO NOT:
+- Say "I will search" (search is already done)
+- Say "Let me look" (results are above)
+- Use future tense like "I'll search"
+
+DO:
+- Extract the answer from the "Content:" sections above
+- Start immediately with the answer
+- Use the exact information from the results
+
+Answer now:""")
+            else:
+                prompt_parts.append(f"""Helpful assistant for document management.
 
 User: "{user_message}"
-{context}{web_search_section}
+""")
+            
+            # Add context if available
+            if context:
+                prompt_parts.append(f"Context: {context}\n")
+            
+            # Add remaining instructions
+            if web_search_results:
+                # If web search results are provided, skip redundant instructions (already covered above)
+                prompt_parts.append(f"""Response: Helpful, friendly, concise. Answer the user's question directly using the web search results provided above.
 
-Context: Use conversation history for follow-ups ("yeah", "yes", "do it" refer to previous messages).
-If web search results are provided, use them to answer questions with accurate, current information.
+CRITICAL - Response Format:
+- Start IMMEDIATELY with the answer from web search results
+- Example: "The current president of the United States is [Name from web search results]..."
+- DO NOT say "I will search" or "Let me look that up" - the search is already done
+- DO NOT use future tense like "I'll search" - use present tense with the information from results
 
-Response: Helpful, friendly, concise. For "summarize" or "read", provide content summary in chat.
+Current date context: Today is {current_date_str}, current year is {current_year}
+- When user asks about "this year" or "current year" → use {current_year}
+- When user asks about a month without a year (e.g., "December", "January", "March") → use the most recent occurrence of that month based on current date
+  * Example: If current date is January {current_year} and user asks "what happened in December" → December {current_year - 1} (most recent)
+  * Example: If current date is March {current_year} and user asks "what happened in January" → January {current_year} (most recent)
+  * Example: If current date is March {current_year} and user asks "what happened in December" → December {current_year - 1} (most recent)
+  * Always infer the most recent occurrence based on the current date ({current_date_str})
 
 CRITICAL - Formatting for closing statements:
 - If you include a closing pleasantry (e.g., "If you have any more questions...", "Feel free to ask!", etc.)
@@ -541,4 +637,31 @@ CRITICAL - Formatting for closing statements:
   [Actual answer/information]
   
   
-  If you have any more questions or need assistance with something else, feel free to ask!"""
+  If you have any more questions or need assistance with something else, feel free to ask!
+""")
+            else:
+                # No web search results - include general instructions
+                prompt_parts.append(f"""Context: Use conversation history for follow-ups ("yeah", "yes", "do it" refer to previous messages).
+
+Response: Helpful, friendly, concise. For "summarize" or "read", provide content summary in chat.
+
+Current date context: Today is {current_date_str}, current year is {current_year}
+- When user asks about "this year" or "current year" → use {current_year}
+- When user asks about a month without a year (e.g., "December", "January", "March") → use the most recent occurrence of that month based on current date
+  * Example: If current date is January {current_year} and user asks "what happened in December" → December {current_year - 1} (most recent)
+  * Example: If current date is March {current_year} and user asks "what happened in January" → January {current_year} (most recent)
+  * Example: If current date is March {current_year} and user asks "what happened in December" → December {current_year - 1} (most recent)
+  * Always infer the most recent occurrence based on the current date ({current_date_str})
+
+CRITICAL - Formatting for closing statements:
+- If you include a closing pleasantry (e.g., "If you have any more questions...", "Feel free to ask!", etc.)
+- Add 2-3 blank lines (line breaks) BEFORE the closing statement
+- This visually separates the actual information from the closing pleasantry
+- Example format:
+  [Actual answer/information]
+  
+  
+  If you have any more questions or need assistance with something else, feel free to ask!
+""")
+            
+            return "".join(prompt_parts)

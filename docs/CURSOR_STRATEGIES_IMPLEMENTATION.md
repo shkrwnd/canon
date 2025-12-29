@@ -216,3 +216,4 @@ This document summarizes the implementation of Cursor-style reliability strategi
 
 The agent now follows the Cursor philosophy: **Inspect → Act → Validate → Commit**
 
+

@@ -846,11 +846,14 @@ class AgentService:
             
             else:
                 # No edit - use conversational response if available, otherwise generate one
-                if conversational_response:
+                # CRITICAL: If web search was performed, always generate response to include results and post-processing
+                web_search_performed = result.get("web_search_performed", False)
+                if conversational_response and not web_search_performed:
                     agent_response_content = conversational_response
                 else:
                     # Generate a conversational response for questions/general conversation
-                    logger.debug("Generating conversational response")
+                    # This ensures web search results are included and post-processing runs
+                    logger.debug("Generating conversational response" + (" (web search performed, overriding decision's conversational_response)" if conversational_response and web_search_performed else ""))
                     
                     # Get project documents for context if user is asking about content
                     project_id_to_check = request.project_id or chat.project_id
@@ -914,12 +917,25 @@ class AgentService:
                     # Include web search results if available for conversational responses
                     web_search_results_for_conversation = result.get("web_search_results")
                     
+                    # Add detailed logging to verify web search results are being passed
+                    logger.info(f"[AGENT] Preparing conversational response: "
+                               f"has_results={web_search_results_for_conversation is not None}, "
+                               f"results_length={len(web_search_results_for_conversation) if web_search_results_for_conversation else 0}, "
+                               f"result_keys={list(result.keys())}, "
+                               f"web_search_performed={web_search_performed}, "
+                               f"conversational_response_from_decision={'present' if conversational_response else 'missing'}")
+                    
+                    if web_search_results_for_conversation:
+                        logger.info(f"[AGENT] Web search results preview (first 500 chars): {web_search_results_for_conversation[:500]}")
+                    
                     agent_response_content = await self.llm_service.generate_conversational_response(
                         request.message,
                         context,
                         chat_history=chat_history_for_llm,
                         web_search_results=web_search_results_for_conversation
                     )
+                    
+                    logger.info(f"[AGENT] Conversational response received, length: {len(agent_response_content)}, preview: {agent_response_content[:200]}")
             
             # Store agent response
             logger.debug(f"Storing agent response in chat {chat.id}")
