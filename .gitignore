@@ -57,6 +57,7 @@ frontend/.pnp.js
 .coverage
 htmlcov/
 .pytest_cache/
+backend/tests/reports/
 
 # OS
 .DS_Store
