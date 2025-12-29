@@ -1,0 +1,1244 @@
+{
+  "timestamp": "2025-12-29T10:06:09.951094",
+  "total_tests": 50,
+  "passed_tests": 38,
+  "failed_tests": 12,
+  "summary": {
+    "pass_rate": 76.0,
+    "category_stats": {
+      "two_stage_prompting": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "web_search_retry": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "document_validation": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "chat_history": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "document_resolution": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "source_attribution": {
+        "total": 3,
+        "passed": 0,
+        "failed": 3
+      },
+      "confirmation_handling": {
+        "total": 3,
+        "passed": 2,
+        "failed": 1
+      },
+      "multi_turn": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "standing_instructions": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "edit_scope": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "web_search_quality": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "complex_intent": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "error_recovery": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "performance": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "boundary_conditions": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "real_world": {
+        "total": 4,
+        "passed": 2,
+        "failed": 2
+      }
+    },
+    "average_execution_time": 11.776460938453674
+  },
+  "results": [
+    {
+      "test_name": "Two-Stage: Ambiguous Intent Needs Full Context",
+      "category": "two_stage_prompting",
+      "description": "Should use Stage 1 to classify as edit, then Stage 2 to resolve which document and what to improve. Tests if needs_documents flag works correctly.",
+      "message": "improve the document",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.110053062438965,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I understood your request, but couldn't update the document.\nReason: The user requested to improve a document, which requires editing but no specific document was mentioned. Since no documents currently exist, a new document will be created."
+    },
+    {
+      "test_name": "Two-Stage: Simple Greeting Early Exit",
+      "category": "two_stage_prompting",
+      "description": "Should exit early after Stage 1 for simple greetings (token optimization)",
+      "message": "hi",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 1.4978129863739014,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi there! How can I assist you today?"
+    },
+    {
+      "test_name": "Two-Stage: Complex Edit Needs Full Documents",
+      "category": "two_stage_prompting",
+      "description": "Should use Stage 1 to determine needs_documents=true, then Stage 2 with full document content",
+      "message": "update all documents that mention Python to include the latest version",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.481653928756714,
+      "expected": {
+        "intent": "edit",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I understood your request, but couldn't update the document.\nReason: The user wants to ensure that all references to Python in documents are updated to reflect the latest version. Since no documents currently exist, a new document will need to be created or inferred based on the context."
+    },
+    {
+      "test_name": "Web Search: Low Quality Results Trigger Retry",
+      "category": "web_search_retry",
+      "description": "Should evaluate search quality and retry with different query if results are poor",
+      "message": "what is the current Bitcoin price",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 7.364535093307495,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current Bitcoin price is $87,937.94.  \n\n\nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Multiple Retries with Query Refinement",
+      "category": "web_search_retry",
+      "description": "Should retry up to max_retries with progressively refined queries",
+      "message": "what are the latest AI safety regulations in 2025",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.04232406616211,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest AI safety regulations in 2025 include the Responsible AI Safety and Education Act (RAISE Act), which sets a new standard for AI safety by requiring the largest AI developers to adhere to specific safety protocols. This act was signed into law and reflects a significant shift towards greater accountability and transparency in AI development.\n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Retry Disabled Still Works",
+      "category": "web_search_retry",
+      "description": "Should work correctly even if retry is disabled (tests retry logic doesn't break single attempt)",
+      "message": "who is the current president of US",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.200397729873657,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current president of the United States is Donald John Trump. He was sworn into office on January 20, 2025.  \n\n\nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Quality Score Below Threshold",
+      "category": "web_search_retry",
+      "description": "Should retry if quality score is below min_quality_score threshold",
+      "message": "what are the latest React hooks best practices",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.956101894378662,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest React hooks best practices include: always cleaning up side effects to prevent memory leaks, and ensuring that hooks are not called conditionally; they must be called at the top level of your component. Additionally, React Hooks in 2025 are considered the foundation of modern React development, emphasizing a cleaner code structure and more efficient component management.\n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Validation: Selective Edit Loses Sections",
+      "category": "document_validation",
+      "description": "Should preserve all sections when doing selective edit. If validation fails, should retry with stronger preservation instructions.",
+      "message": "edit the Python Guide and make the introduction more concise",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.7703492641448975,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I understood your request, but couldn't update the document.\nReason: The user explicitly requested to edit the Python Guide by making the introduction more concise, which qualifies as a selective edit."
+    },
+    {
+      "test_name": "Validation: Full Rewrite Preserves Structure",
+      "category": "document_validation",
+      "description": "Should preserve all section headings even in full rewrite. Validation should catch missing sections.",
+      "message": "rewrite the entire Python Guide with better organization",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.513995885848999,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I understood your request, but couldn't update the document.\nReason: The user has explicitly requested to rewrite the entire Python Guide, which falls under a full edit scope."
+    },
+    {
+      "test_name": "Validation: Retry After Validation Failure",
+      "category": "document_validation",
+      "description": "If validation fails (sections lost), should retry once with validation_errors included in prompt",
+      "message": "update the Python Guide to remove outdated information",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.940362691879272,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Are you sure you want to remove outdated information from the Python Guide?"
+    },
+    {
+      "test_name": "Chat History: Confirmation After 3 Messages",
+      "category": "chat_history",
+      "description": "Should use last 5 messages to find pending confirmation from 3 messages ago",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.278705835342407,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "How can I assist you with your Hard Test Cases Project? Feel free to ask about adding or editing documents."
+    },
+    {
+      "test_name": "Chat History: Multi-Turn Document Reference",
+      "category": "chat_history",
+      "description": "Should resolve 'that' and 'it' from previous messages in chat history",
+      "message": "add that to it",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.303268909454346,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "Create a new document for the Hard Test Cases Project.\n\n\n**Document Content Summary:**\nThis document will serve as a central repository for test cases related to the Hard Test Cases Project."
+    },
+    {
+      "test_name": "Chat History: Context Across 5+ Messages",
+      "category": "chat_history",
+      "description": "Should use chat history to identify which document was discussed first",
+      "message": "update the first document we discussed",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.043565034866333,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "update the Hard Test Cases Project document\n\n\n**Content Summary:**\nThe document is currently empty, and content is needed to proceed with the update."
+    },
+    {
+      "test_name": "Chat History: Decision Metadata in History",
+      "category": "chat_history",
+      "description": "Should use decision metadata from previous messages to answer 'where' questions",
+      "message": "where did you save that script",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.843266010284424,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I updated the Hard Test Cases Project document. The updates include new features, timeline adjustments, and team changes. You can find it in your project documents."
+    },
+    {
+      "test_name": "Document Resolution: Similar Names (Python Guide vs Python guide)",
+      "category": "document_resolution",
+      "description": "Should handle case-insensitive matching when multiple similar names exist",
+      "message": "edit the python guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 14.314650058746338,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User wants to edit the document about Python guide, which implies current features.\n\n\n**Content Summary:**\nThe document will be enhanced by incorporating the most recent updates and features of Python as of 2025. This ensures the content remains relevant and useful for users seeking current information.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released in late 2025, introduced several significant features including a native ta"
+    },
+    {
+      "test_name": "Document Resolution: Content-Based Match",
+      "category": "document_resolution",
+      "description": "Should match document by content (travel/itinerary doc) when name not specified",
+      "message": "add hotel recommendations",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 12.083922863006592,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add hotel recommendations to the Hard Test Cases Project document.\n\n\n**Content Summary:**\nAdded a new section titled 'Hotel Recommendations' to provide suggestions for accommodations related to the project."
+    },
+    {
+      "test_name": "Document Resolution: Context from History",
+      "category": "document_resolution",
+      "description": "Should use conversation history to determine which document to edit",
+      "message": "add more details",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 20.454137802124023,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add more details to the document.\n\n\n**Changes:** Searching for the latest Python features to include in the document.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, introducing features such as free-threading support, deferred annotations for improved startup and import times, and a new native task keyword for simplifying asynchronous jobs. Other enhancements include better error messa"
+    },
+    {
+      "test_name": "Document Resolution: Ambiguous Multiple Matches",
+      "category": "document_resolution",
+      "description": "Should handle ambiguity when multiple 'guide' documents exist (may need clarification)",
+      "message": "update the guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 15.697908878326416,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested an update to the Hard Test Cases Project document.\n\n\n**Note:** Missing sections from original: Updated Document Title"
+    },
+    {
+      "test_name": "Source Attribution: Multiple Web Search Results",
+      "category": "source_attribution",
+      "description": "Should include ALL URLs from web search results in Sources section, even if multiple searches were performed",
+      "message": "edit the Python Guide and add information about the latest Python features, performance improvements, and security updates",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 38.83617305755615,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "I rewrote the document but validation found issues:\n- Lost 2 sections (20.0% of document): Update 3: Team Changes, Update 2: Timeline Adjustments. This suggests content was accidentally removed.\n\nI can retry with fixes. Should I proceed?"
+    },
+    {
+      "test_name": "Source Attribution: Retry Results Include All URLs",
+      "category": "source_attribution",
+      "description": "If web search was retried, should include URLs from ALL attempts in Sources section",
+      "message": "add the latest React performance optimizations to the Python Guide",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 22.03849720954895,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "add the latest React performance optimizations to the Python Guide\n\n\n**Content Summary:**\nThe document will be updated to include the most recent performance optimizations related to React as of 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest React performance optimizations 2025`\n**Results Summary:** The search results emphasize various techniques for optimizing React app performance in 2025, including code splitting, memoization, lazy loading, and minimizing re-renders. Key strateg"
+    },
+    {
+      "test_name": "Source Attribution: Post-Processing Adds Missing Sources",
+      "category": "source_attribution",
+      "description": "If LLM forgets Sources section, post-processing should add it automatically",
+      "message": "edit the Python Guide and add the current Python version",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 22.985558032989502,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'; Document validation failed: The document contains an incorrect Python version information and the sources are not relevant to the current version as of October 2023.. Issues: The stated current Python version is incorrect; Python 3.14 was not released on October 7, 2025., The sources provided do not confirm the accuracy of the current Python version as of October 2023.",
+      "response_preview": "Edit the Python Guide and add the current Python version\n\n\n**Content Summary:**\nThe document will be updated to include the current version of Python, ensuring it reflects the most accurate and relevant information for users.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. This version follows Python 3.13.5, which has been noted for its enhanced optimizat"
+    },
+    {
+      "test_name": "Confirmation: Yes After Destructive Action Prompt",
+      "category": "confirmation_handling",
+      "description": "Should check last 5 messages for pending_confirmation and execute the intended action",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.735152959823608,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hello! How can I assist you with the Hard Test Cases Project today? The project contains updates and insights into its goals and recent changes. What would you like to discuss or work on?"
+    },
+    {
+      "test_name": "Confirmation: No After Destructive Action Prompt",
+      "category": "confirmation_handling",
+      "description": "Should recognize 'no' as cancellation and not perform the action",
+      "message": "no",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 4.6615800857543945,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": "Intent mismatch: expected 'conversation', got 'clarify'",
+      "response_preview": "Hello! How can I assist you with the Hard Test Cases Project? This project contains information about the project's goals, recent updates, and timelines. What would you like to work on today?"
+    },
+    {
+      "test_name": "Confirmation: Multiple Confirmations in History",
+      "category": "confirmation_handling",
+      "description": "Should use the most recent pending confirmation from chat history",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 3.8819217681884766,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "clarify",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "How can I assist you with the Hard Test Cases Project today? If you need help with specific documents or tasks, just let me know!"
+    },
+    {
+      "test_name": "Multi-Turn: Follow-up Question After Edit",
+      "category": "multi_turn",
+      "description": "Should use chat history to understand what was changed in previous turn",
+      "message": "what did you change",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 6.201431035995483,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The most recent updates to the Hard Test Cases Project include the addition of new features such as a dynamic user interface, integration with third-party services, and enhanced security measures. Additionally, the project timeline has been adjusted to extend the delivery date to February 1, 2023, to accommodate these new features and ensure quality deliverables."
+    },
+    {
+      "test_name": "Multi-Turn: Reference Previous Content",
+      "category": "multi_turn",
+      "description": "Should resolve 'that' from previous agent response or user message",
+      "message": "add more details about that",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.858098030090332,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi! How can I help with your Hard Test Cases Project? This project contains information about the project's goals, recent updates, and timelines. Here are the documents in this project:\n1. Hard Test Cases Project - Updated Project Guide: This document outlines the project's critical aspects, including goals, recent updates on new features and timeline adjustments, and aims to ensure all stakeholders are informed. \nWhat would you like to work on?"
+    },
+    {
+      "test_name": "Multi-Turn: Chain of Edits",
+      "category": "multi_turn",
+      "description": "Should understand 'it' refers to the document edited in previous turn",
+      "message": "now make it more concise",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 14.802035808563232,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "make the document more concise\n\n\n**Content Summary:**\nUpdated the existing document by condensing the content while maintaining essential information. Focused on streamlining the language and removing any redundant phrases to improve readability.\n\n\n**Note:** Missing sections from original: Updated Project Guide"
+    },
+    {
+      "test_name": "Multi-Turn: Question About Previous Action",
+      "category": "multi_turn",
+      "description": "Should explain reasoning from previous action using chat history",
+      "message": "why did you do that",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.735767126083374,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I have updated the Hard Test Cases Project document with recent updates and team changes. It includes information on new features, timeline adjustments, and team member additions. You can find it in your project documents."
+    },
+    {
+      "test_name": "Standing Instructions: Edit Respects Instructions",
+      "category": "standing_instructions",
+      "description": "Should maintain consistency with document's standing instructions when editing",
+      "message": "add a section about advanced topics",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 16.3748722076416,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add a section about advanced topics in the Hard Test Cases Project document.\n\n\n**Content Summary:**\nAdded a section on advanced topics to provide deeper insights into complex features and methodologies relevant to the Hard Test Cases Project."
+    },
+    {
+      "test_name": "Standing Instructions: Create With Instructions",
+      "category": "standing_instructions",
+      "description": "Should create document with appropriate standing instructions based on document type",
+      "message": "create a technical guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.385480880737305,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "Create a technical guide for the Hard Test Cases Project.\n\n\n**Document Content Summary:**\nThe technical guide includes sections on system architecture, development methodologies, and the technologies employed in the project. It serves as a reference for developers and stakeholders, ensuring clarity on the project's technical aspects."
+    },
+    {
+      "test_name": "Edit Scope: Selective Edit Preserves All Sections",
+      "category": "edit_scope",
+      "description": "Should preserve ALL other sections when doing selective edit. Validation should catch any lost sections.",
+      "message": "edit the Python Guide and improve the introduction section",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 16.233049869537354,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not contain an 'Introduction' section, which is a requirement for validation.. Issues: Missing 'Introduction' section, Original structure not maintained as required",
+      "response_preview": "edit the Python Guide and improve the introduction section\n\n\n**Content Summary:**\nThe introduction section of the Python Guide will be enhanced to reflect the most current developments in Python, ensuring it provides accurate and relevant information for readers.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, featuring significant enhancements such as free-threaded support, deferred annotations for impr"
+    },
+    {
+      "test_name": "Edit Scope: Full Rewrite Preserves Headings",
+      "category": "edit_scope",
+      "description": "Even in full rewrite, should preserve all section headings and structure",
+      "message": "rewrite the entire Python Guide with better structure",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 13.531497955322266,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not preserve the original section headings as required. The original request was to rewrite a Python Guide, but the headings in the document do not match the expected ones.. Issues: The main heading 'Technical Guide' does not match 'Python Guide'., Section headings such as 'Features' and 'Introduction' are missing.",
+      "response_preview": "rewrite the entire Python Guide\n\n\n**Content Summary:**\nThe rewrite will focus on enhancing the organization of the content, ensuring that it is more user-friendly and accessible. All existing topics will be retained, and the language will be refined to improve readability."
+    },
+    {
+      "test_name": "Edit Scope: Selective After Failed Full",
+      "category": "edit_scope",
+      "description": "If full rewrite fails validation, retry should use selective scope to preserve content",
+      "message": "completely rewrite the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 21.689076900482178,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Rewrite the Python Guide\n\n\n**Content Summary:**\nThe rewritten Python Guide will incorporate the most recent developments in Python programming, ensuring that it is relevant and useful for users seeking current information on the language.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** Python 3.14 was officially released on October 7, 2025, introducing new features and improvements. The main development focus is now on Python 3.15, which is the on"
+    },
+    {
+      "test_name": "Web Search Quality: Evaluate Relevance",
+      "category": "web_search_quality",
+      "description": "Should evaluate if search results are relevant to the query and retry if quality is low",
+      "message": "what are the latest TypeScript features",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.792114019393921,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest TypeScript features include enhanced type inference, the satisfies operator, module augmentation for third-party extensions, template literal types, smarter inference that reduces boilerplate, stricter safety with the satisfies operator, and real resource management with the using statement. Additionally, the introduction of the blazing-fast tsgo compiler is noted as a significant advancement in TypeScript for 2025.\n\n  \nIf you have any more questions or need assistance with something "
+    },
+    {
+      "test_name": "Web Search Quality: Summarize Results",
+      "category": "web_search_quality",
+      "description": "Should summarize web search results if summarization is enabled",
+      "message": "what are the current best practices for React state management",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 11.2034170627594,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current best practices for React state management include:\n\n1. **Keep States Close to Components**: This helps in reducing unnecessary re-renders and makes the state easier to manage.\n2. **Manage Dependencies or States Granularly**: This approach enhances performance by ensuring that only necessary components re-render when state changes.\n3. **Use `useState` for Simple Local State**: For straightforward state management within a single component, `useState` is recommended.\n4. **Use `useReduc"
+    },
+    {
+      "test_name": "Complex Intent: Edit + Web Search + Source Attribution",
+      "category": "complex_intent",
+      "description": "Combines edit intent, web search trigger, and source attribution - tests full flow",
+      "message": "edit the document about latest Python features, make it more comprehensive, and ensure all information is current",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 21.212610006332397,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'; Document validation failed: The document does not comprehensively cover multiple aspects of the latest Python features, and while it includes a '## Sources' section, the information is not fully current as it references Python 3.14, which is not the latest version as of October 2023.. Issues: The document lacks a comprehensive overview of multiple Python features beyond just a few listed., The information about Python 3.14 is outdated as the latest version is beyond that as of October 2023., The structure is generally good, but the content needs to be more focused on Python features specifically.",
+      "response_preview": "Edit the document about latest Python features to make it more comprehensive.\n\n\n**Content Summary:**\nThe document will be expanded to include comprehensive details about the latest features of Python as of 2025, ensuring that all information is current and relevant.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduced significant enhancements including faster startup times, a native task keyword for"
+    },
+    {
+      "test_name": "Complex Intent: Create + Web Search + Content Generation",
+      "category": "complex_intent",
+      "description": "Combines create intent, web search, content generation, and source attribution",
+      "message": "create a comprehensive guide about the latest AI developments in 2025",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 11.963071823120117,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": "Web search mismatch: expected True, got False; Expected content not found: '## Sources'",
+      "response_preview": "Create a comprehensive guide about the latest AI developments in 2025.\n\n\n**Document Content Summary:**\nThe document outlines key advancements in AI, including generative models, natural language processing, healthcare applications, autonomous systems, and ethical considerations. It also discusses future trends such as AI's role in sustainability and human-AI collaboration."
+    },
+    {
+      "test_name": "Complex Intent: Multi-Step Implicit Request",
+      "category": "complex_intent",
+      "description": "Tests if agent can handle implicit multi-step requests (may need clarification or do sequentially)",
+      "message": "update the Python Guide with the latest version and also create a quick reference card",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 21.70319104194641,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Update the Technical Guide with the latest Python version and create a quick reference card.\n\n\n**Content Summary:**\nThe Technical Guide will be updated to reflect the most current version of Python as of 2025. A quick reference card will be created to summarize key Python features and usage.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major Python version, 3.14, was released on October 7, 2025, and is currently the most recent versi"
+    },
+    {
+      "test_name": "Error Recovery: Document Not Found Graceful Handling",
+      "category": "error_recovery",
+      "description": "Should recognize edit intent even if document doesn't exist, provide helpful error message",
+      "message": "edit the document called DefinitelyDoesNotExist12345",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 4.243129014968872,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": "Should edit mismatch: expected True, got False",
+      "response_preview": "The document you mentioned, 'DefinitelyDoesNotExist12345', does not exist in the current project. If you'd like to create a new document or edit an existing one, please let me know!"
+    },
+    {
+      "test_name": "Error Recovery: Validation Failure Retry",
+      "category": "error_recovery",
+      "description": "If validation fails (sections lost), should retry with validation errors and succeed on retry",
+      "message": "rewrite the Python Guide completely",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 20.000514030456543,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not preserve the original section heading 'Latest Python Features' as it has been altered to include a specific version (3.14) and its features, which deviates from the original request for a complete rewrite.. Issues: Original section heading 'Latest Python Features' was modified to include versioning, which is not a preservation of the original heading.",
+      "response_preview": "User requested a complete rewrite of the Python Guide.\n\n\n**Content Summary:**\nThe current Python Guide will be updated to reflect the most recent advancements and methodologies in Python programming as of 2025, ensuring that all information is accurate and relevant.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several significant features, including native task keywords for simplifying async"
+    },
+    {
+      "test_name": "Error Recovery: Web Search Failure",
+      "category": "error_recovery",
+      "description": "Should handle web search failures gracefully and still provide response",
+      "message": "what is the current price of a non-existent cryptocurrency XYZ123",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 18.08258318901062,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current price of the non-existent cryptocurrency XYZ123 is not available in the provided search results.\n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Performance: Large Document Edit",
+      "category": "performance",
+      "description": "Should handle editing large documents efficiently (tests document truncation logic)",
+      "message": "edit the Python Guide and add a comprehensive FAQ section",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.812013626098633,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Could you please specify what topics you would like to include in the comprehensive FAQ section for the Python Guide?"
+    },
+    {
+      "test_name": "Performance: Multiple Documents Context",
+      "category": "performance",
+      "description": "Should efficiently analyze multiple documents without loading full content unnecessarily",
+      "message": "which document has the most content about Python",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.07451605796814,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The documents currently available for the Hard Test Cases Project do not contain specific content about Python. The Technical Guide covers technologies like React, Node.js, and MongoDB, while the other documents focus on project management and AI developments. If you need information on Python or related topics, please specify, and I can assist you further."
+    },
+    {
+      "test_name": "Boundary: Exactly 5 Messages in History",
+      "category": "boundary_conditions",
+      "description": "Should correctly use last 5 messages (boundary of history length)",
+      "message": "what did you do 5 messages ago",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.65317702293396,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Five messages ago, I provided a summary of the documents related to the Hard Test Cases Project, detailing their content and purpose. If you need further assistance or specific information, feel free to ask!"
+    },
+    {
+      "test_name": "Boundary: Empty Document Edit",
+      "category": "boundary_conditions",
+      "description": "Should handle editing documents with minimal or empty content",
+      "message": "edit the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.466135025024414,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Could you please specify what changes you would like to make to the Python Guide?"
+    },
+    {
+      "test_name": "Boundary: Maximum Web Search Retries",
+      "category": "boundary_conditions",
+      "description": "Should respect max_retries limit and not exceed it even if quality is still low",
+      "message": "what are the latest developments in quantum computing error correction",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.973620414733887,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Recent developments in quantum computing error correction include Chinese researchers demonstrating fault-tolerant quantum error correction below the threshold using an all-microwave control approach. Additionally, Google Quantum AI showcased hardware that began \u201cgoing below threshold\u201d for error correction, marking a significant advancement in this area. Furthermore, scientists have developed a new method using microwave pulses to correct common quantum computing errors, which could lead to more"
+    },
+    {
+      "test_name": "Real-World: Writer Workflow - Iterative Refinement",
+      "category": "real_world",
+      "description": "Simulates real writer workflow: iterative refinement of document sections",
+      "message": "make the introduction more engaging",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 17.97469425201416,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to make the introduction more engaging.\n\n\n**Content Summary:**\nUpdated the introduction to highlight the importance of collaboration, transparency, and communication in the project, aiming to keep all stakeholders engaged and informed."
+    },
+    {
+      "test_name": "Real-World: Researcher - Fact Verification",
+      "category": "real_world",
+      "description": "Simulates researcher workflow: fact-checking and updating with latest information",
+      "message": "update the research document with the latest findings from December 2024",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 25.085921049118042,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not contain any information about findings from December 2024, and the current Python version mentioned is incorrectly dated as October 2025.. Issues: No findings or updates from December 2024 are present in the document., The current Python version is incorrectly stated as being released in October 2025, which is beyond the current date.",
+      "response_preview": "Update the Hard Test Cases Project document with the latest findings from December 2024.\n\n\n**Content Summary:**\nThe update will include the most recent advancements and findings relevant to the Hard Test Cases Project as of December 2024, ensuring that all stakeholders have access to the latest information.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest findings December 2024`\n**Results Summary:** In December 2024, environmental issues dominated global discussions, particularly the impac"
+    },
+    {
+      "test_name": "Real-World: Editor - Multi-Document Coordination",
+      "category": "real_world",
+      "description": "Simulates editor workflow: maintaining consistency across multiple documents (may need clarification)",
+      "message": "ensure all documents use consistent terminology",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 20.252219200134277,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Ensure all documents use consistent terminology.\n\n\n**Content Summary:**\nThe process will involve examining the language used in each document related to the Hard Test Cases Project and making necessary adjustments to terminology. This will help in maintaining a uniform understanding among all stakeholders."
+    },
+    {
+      "test_name": "Real-World: Power User - Complex Multi-Step",
+      "category": "real_world",
+      "description": "Simulates power user: complex request with multiple requirements",
+      "message": "create a guide about the latest Python features, make it comprehensive, include examples, and add source links",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 19.48291516304016,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "I've created the document 'Python Guide' in this project.\n\n\n**Document Content Summary:**\nThe newly created 'Python Guide' includes an introduction to the latest features in Python, such as structural pattern matching, performance improvements in CPython, and enhancements in type hinting. It also provides examples for better understanding and includes links to official documentation for further reading.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summar"
+    }
+  ]
+}

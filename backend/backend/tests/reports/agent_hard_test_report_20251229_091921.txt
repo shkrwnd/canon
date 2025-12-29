@@ -1,0 +1,376 @@
+================================================================================
+AGENT EDGE CASE TEST REPORT
+================================================================================
+
+Timestamp: 2025-12-29T09:19:21.703591
+Total Tests: 50
+Passed: 38 (76.0%)
+Failed: 12
+Average Execution Time: 17.58s
+
+Category Breakdown:
+--------------------------------------------------------------------------------
+two_stage_prompting            3/3 passed (100.0%)
+web_search_retry               4/4 passed (100.0%)
+document_validation            1/3 passed (33.3%)
+chat_history                   4/4 passed (100.0%)
+document_resolution            4/4 passed (100.0%)
+source_attribution             0/3 passed (0.0%)
+confirmation_handling          3/3 passed (100.0%)
+multi_turn                     4/4 passed (100.0%)
+standing_instructions          2/2 passed (100.0%)
+edit_scope                     1/3 passed (33.3%)
+web_search_quality             2/2 passed (100.0%)
+complex_intent                 1/3 passed (33.3%)
+error_recovery                 2/3 passed (66.7%)
+performance                    2/2 passed (100.0%)
+boundary_conditions            3/3 passed (100.0%)
+real_world                     2/4 passed (50.0%)
+
+Failed Tests:
+--------------------------------------------------------------------------------
+
+✗ Validation: Selective Edit Loses Sections
+  Category: document_validation
+  Message: edit the Python Guide and make the introduction more concise
+  Status: 200
+  Error: Document validation failed: The document does not include a more concise introduction as requested, and it appears to be the original content without any modifications.. Issues: No concise introduction provided., All original sections are preserved, but the requirement to make the introduction more concise was not fulfilled.
+  Response Preview: User requested to edit the Python guide to make the introduction more concise.
+
+
+**Content Summary:**
+The document will be updated to reflect a more succinct introduction regarding the latest version ...
+
+✗ Validation: Retry After Validation Failure
+  Category: document_validation
+  Message: update the Python Guide to remove outdated information
+  Status: 200
+  Error: Document validation failed: The document contains outdated information regarding the Python version and its release date, which is set in the future (October 2025).. Issues: The version mentioned (3.14.2) and its release date (October 7, 2025) are not current as of October 2023., The installation instructions reference a video tutorial dated in the future (2025)., The sources include links that reference future events or versions.
+  Response Preview: Update the Python Guide to remove outdated information
+
+
+**Content Summary:**
+The document will be revised to remove references to outdated Python versions and installation instructions. A search for ...
+
+✗ Source Attribution: Multiple Web Search Results
+  Category: source_attribution
+  Message: edit the Python Guide and add information about the latest Python features, performance improvements, and security updates
+  Status: 200
+  Error: Expected content not found: '## Sources'
+  Response Preview: User requested to add information about the latest Python features, performance improvements, and security updates to the Python Guide.
+
+
+**Content Summary:**
+The document will be updated with the lat...
+
+✗ Source Attribution: Retry Results Include All URLs
+  Category: source_attribution
+  Message: add the latest React performance optimizations to the Python Guide
+  Status: 200
+  Error: Expected content not found: '## Sources'
+  Response Preview: User requested to add the latest React performance optimizations to the Python Guide.
+
+
+**Content Summary:**
+The document currently contains information about Python updates and features, and the user...
+
+✗ Source Attribution: Post-Processing Adds Missing Sources
+  Category: source_attribution
+  Message: edit the Python Guide and add the current Python version
+  Status: 200
+  Error: Expected content not found: '## Sources'; Document validation failed: The document contains an incorrect Python version information and the release date is in the future, which is not accurate.. Issues: The document states that Python 3.14 was released on October 7, 2025, which is a future date., The current version of Python as of October 2023 should be 3.12, not 3.14.
+  Response Preview: Update the Comprehensive Python Guide with the current Python version.
+
+
+**Content Summary:**
+The existing document contains information about Python 3.14, released in October 2025. The update will in...
+
+✗ Edit Scope: Selective Edit Preserves All Sections
+  Category: edit_scope
+  Message: edit the Python Guide and improve the introduction section
+  Status: 200
+  Error: Document validation failed: The document does not maintain its original structure as it includes additional sections (React Performance Optimizations, Hotel Recommendations, and Sources) that were not part of the original request.. Issues: Additional sections added that were not in the original document., The structure of the document has been altered.
+  Response Preview: User requested to improve the introduction section of the Python Guide.
+
+
+**Content Summary:**
+The introduction will be updated to mention the latest Python version released in 2025 and highlight new ...
+
+✗ Edit Scope: Full Rewrite Preserves Headings
+  Category: edit_scope
+  Message: rewrite the entire Python Guide with better structure
+  Status: 200
+  Error: Document validation failed: The document does not preserve the original section headings as required. The section 'Hotel Recommendations' and 'History' are not part of the original request and disrupt the intended structure.. Issues: Additional sections 'Hotel Recommendations' and 'History' were added, which were not part of the original headings.
+  Response Preview: User requested a full rewrite of the Python Guide document.
+
+
+**Content Summary:**
+The existing Python Guide will be restructured and rewritten to improve comprehensibility and incorporate the latest ...
+
+✗ Complex Intent: Edit + Web Search + Source Attribution
+  Category: complex_intent
+  Message: edit the document about latest Python features, make it more comprehensive, and ensure all information is current
+  Status: 200
+  Error: Expected content not found: '## Sources'; Document validation failed: The document does not contain current and up-to-date information as it references a future date (October 2025) for Python 3.14, which is not valid as of October 2023. Additionally, the document lacks a comprehensive coverage of multiple aspects of the latest Python features.. Issues: References a future version of Python (3.14) that is not available as of October 2023., Does not cover multiple aspects of Python features comprehensively., The structure is generally good, but the content is outdated.
+  Response Preview: User requested to edit the document about the latest Python features, ensuring all information is current.
+
+
+**Content Summary:**
+Updated the document to include the latest features of Python 3.14 and...
+
+✗ Complex Intent: Create + Web Search + Content Generation
+  Category: complex_intent
+  Message: create a comprehensive guide about the latest AI developments in 2025
+  Status: 200
+  Error: Web search mismatch: expected True, got False; Expected content not found: '## Sources'; Document validation failed: The document does not contain a '## Sources' section with relevant URLs, and the 'References' section is not properly labeled as '## Sources'.. Issues: Missing '## Sources' section with relevant URLs, References section is not properly labeled
+  Response Preview: Create a comprehensive guide about the latest AI developments in 2025.
+
+
+**Document Content Summary:**
+The newly created document provides an overview of significant AI advancements in 2025. It discus...
+
+✗ Error Recovery: Document Not Found Graceful Handling
+  Category: error_recovery
+  Message: edit the document called DefinitelyDoesNotExist12345
+  Status: 200
+  Error: Should edit mismatch: expected True, got False
+  Response Preview: It seems that the document you mentioned, 'DefinitelyDoesNotExist12345', does not exist in the project. Please check the document name or provide a different request....
+
+✗ Real-World: Researcher - Fact Verification
+  Category: real_world
+  Message: update the research document with the latest findings from December 2024
+  Status: 200
+  Error: Document validation failed: The document contains information about findings from December 2024, but it is presented as part of a guide for 2025, which does not align with the requirement to update the document specifically for December 2024.. Issues: The document is titled for 2025, which may mislead readers about the currency of the information., The integration of December 2024 findings is present but does not clearly indicate that it is an update to the document as requested.
+  Response Preview: Update the AI Developments 2025 document with the latest findings from December 2024.
+
+
+**Content Summary:**
+The document will be enhanced with the latest AI developments from December 2024, ensuring ...
+
+✗ Real-World: Power User - Complex Multi-Step
+  Category: real_world
+  Message: create a guide about the latest Python features, make it comprehensive, include examples, and add source links
+  Status: 200
+  Error: Expected content not found: '## Sources'
+  Response Preview: Create a comprehensive guide about the latest Python features.
+
+
+**Document Content Summary:**
+The document includes an introduction to Python 3.14, details on key features such as free-threaded Pytho...
+
+================================================================================
+All Test Results:
+================================================================================
+
+✓ Two-Stage: Ambiguous Intent Needs Full Context
+   Category: two_stage_prompting
+   Execution Time: 5.01s
+
+✓ Two-Stage: Simple Greeting Early Exit
+   Category: two_stage_prompting
+   Execution Time: 1.64s
+
+✓ Two-Stage: Complex Edit Needs Full Documents
+   Category: two_stage_prompting
+   Execution Time: 17.41s
+
+✓ Web Search: Low Quality Results Trigger Retry
+   Category: web_search_retry
+   Execution Time: 8.50s
+
+✓ Web Search: Multiple Retries with Query Refinement
+   Category: web_search_retry
+   Execution Time: 9.19s
+
+✓ Web Search: Retry Disabled Still Works
+   Category: web_search_retry
+   Execution Time: 8.46s
+
+✓ Web Search: Quality Score Below Threshold
+   Category: web_search_retry
+   Execution Time: 9.97s
+
+✗ Validation: Selective Edit Loses Sections
+   Category: document_validation
+   Execution Time: 22.65s
+   Error: Document validation failed: The document does not include a more concise introduction as requested, and it appears to be the original content without any modifications.. Issues: No concise introduction provided., All original sections are preserved, but the requirement to make the introduction more concise was not fulfilled.
+
+✓ Validation: Full Rewrite Preserves Structure
+   Category: document_validation
+   Execution Time: 17.89s
+
+✗ Validation: Retry After Validation Failure
+   Category: document_validation
+   Execution Time: 13.82s
+   Error: Document validation failed: The document contains outdated information regarding the Python version and its release date, which is set in the future (October 2025).. Issues: The version mentioned (3.14.2) and its release date (October 7, 2025) are not current as of October 2023., The installation instructions reference a video tutorial dated in the future (2025)., The sources include links that reference future events or versions.
+
+✓ Chat History: Confirmation After 3 Messages
+   Category: chat_history
+   Execution Time: 4.31s
+
+✓ Chat History: Multi-Turn Document Reference
+   Category: chat_history
+   Execution Time: 14.80s
+
+✓ Chat History: Context Across 5+ Messages
+   Category: chat_history
+   Execution Time: 13.65s
+
+✓ Chat History: Decision Metadata in History
+   Category: chat_history
+   Execution Time: 4.87s
+
+✓ Document Resolution: Similar Names (Python Guide vs Python guide)
+   Category: document_resolution
+   Execution Time: 14.82s
+
+✓ Document Resolution: Content-Based Match
+   Category: document_resolution
+   Execution Time: 13.79s
+
+✓ Document Resolution: Context from History
+   Category: document_resolution
+   Execution Time: 20.09s
+
+✓ Document Resolution: Ambiguous Multiple Matches
+   Category: document_resolution
+   Execution Time: 19.62s
+
+✗ Source Attribution: Multiple Web Search Results
+   Category: source_attribution
+   Execution Time: 24.05s
+   Error: Expected content not found: '## Sources'
+
+✗ Source Attribution: Retry Results Include All URLs
+   Category: source_attribution
+   Execution Time: 26.46s
+   Error: Expected content not found: '## Sources'
+
+✗ Source Attribution: Post-Processing Adds Missing Sources
+   Category: source_attribution
+   Execution Time: 24.43s
+   Error: Expected content not found: '## Sources'; Document validation failed: The document contains an incorrect Python version information and the release date is in the future, which is not accurate.. Issues: The document states that Python 3.14 was released on October 7, 2025, which is a future date., The current version of Python as of October 2023 should be 3.12, not 3.14.
+
+✓ Confirmation: Yes After Destructive Action Prompt
+   Category: confirmation_handling
+   Execution Time: 24.33s
+
+✓ Confirmation: No After Destructive Action Prompt
+   Category: confirmation_handling
+   Execution Time: 4.37s
+
+✓ Confirmation: Multiple Confirmations in History
+   Category: confirmation_handling
+   Execution Time: 26.38s
+
+✓ Multi-Turn: Follow-up Question After Edit
+   Category: multi_turn
+   Execution Time: 5.48s
+
+✓ Multi-Turn: Reference Previous Content
+   Category: multi_turn
+   Execution Time: 29.11s
+
+✓ Multi-Turn: Chain of Edits
+   Category: multi_turn
+   Execution Time: 22.94s
+
+✓ Multi-Turn: Question About Previous Action
+   Category: multi_turn
+   Execution Time: 4.62s
+
+✓ Standing Instructions: Edit Respects Instructions
+   Category: standing_instructions
+   Execution Time: 21.30s
+
+✓ Standing Instructions: Create With Instructions
+   Category: standing_instructions
+   Execution Time: 4.91s
+
+✗ Edit Scope: Selective Edit Preserves All Sections
+   Category: edit_scope
+   Execution Time: 33.96s
+   Error: Document validation failed: The document does not maintain its original structure as it includes additional sections (React Performance Optimizations, Hotel Recommendations, and Sources) that were not part of the original request.. Issues: Additional sections added that were not in the original document., The structure of the document has been altered.
+
+✗ Edit Scope: Full Rewrite Preserves Headings
+   Category: edit_scope
+   Execution Time: 32.74s
+   Error: Document validation failed: The document does not preserve the original section headings as required. The section 'Hotel Recommendations' and 'History' are not part of the original request and disrupt the intended structure.. Issues: Additional sections 'Hotel Recommendations' and 'History' were added, which were not part of the original headings.
+
+✓ Edit Scope: Selective After Failed Full
+   Category: edit_scope
+   Execution Time: 35.26s
+
+✓ Web Search Quality: Evaluate Relevance
+   Category: web_search_quality
+   Execution Time: 10.88s
+
+✓ Web Search Quality: Summarize Results
+   Category: web_search_quality
+   Execution Time: 12.28s
+
+✗ Complex Intent: Edit + Web Search + Source Attribution
+   Category: complex_intent
+   Execution Time: 26.81s
+   Error: Expected content not found: '## Sources'; Document validation failed: The document does not contain current and up-to-date information as it references a future date (October 2025) for Python 3.14, which is not valid as of October 2023. Additionally, the document lacks a comprehensive coverage of multiple aspects of the latest Python features.. Issues: References a future version of Python (3.14) that is not available as of October 2023., Does not cover multiple aspects of Python features comprehensively., The structure is generally good, but the content is outdated.
+
+✗ Complex Intent: Create + Web Search + Content Generation
+   Category: complex_intent
+   Execution Time: 12.21s
+   Error: Web search mismatch: expected True, got False; Expected content not found: '## Sources'; Document validation failed: The document does not contain a '## Sources' section with relevant URLs, and the 'References' section is not properly labeled as '## Sources'.. Issues: Missing '## Sources' section with relevant URLs, References section is not properly labeled
+
+✓ Complex Intent: Multi-Step Implicit Request
+   Category: complex_intent
+   Execution Time: 34.22s
+
+✗ Error Recovery: Document Not Found Graceful Handling
+   Category: error_recovery
+   Execution Time: 4.75s
+   Error: Should edit mismatch: expected True, got False
+
+✓ Error Recovery: Validation Failure Retry
+   Category: error_recovery
+   Execution Time: 28.45s
+
+✓ Error Recovery: Web Search Failure
+   Category: error_recovery
+   Execution Time: 16.31s
+
+✓ Performance: Large Document Edit
+   Category: performance
+   Execution Time: 31.60s
+
+✓ Performance: Multiple Documents Context
+   Category: performance
+   Execution Time: 5.37s
+
+✓ Boundary: Exactly 5 Messages in History
+   Category: boundary_conditions
+   Execution Time: 4.16s
+
+✓ Boundary: Empty Document Edit
+   Category: boundary_conditions
+   Execution Time: 35.42s
+
+✓ Boundary: Maximum Web Search Retries
+   Category: boundary_conditions
+   Execution Time: 10.47s
+
+✓ Real-World: Writer Workflow - Iterative Refinement
+   Category: real_world
+   Execution Time: 32.45s
+
+✗ Real-World: Researcher - Fact Verification
+   Category: real_world
+   Execution Time: 25.51s
+   Error: Document validation failed: The document contains information about findings from December 2024, but it is presented as part of a guide for 2025, which does not align with the requirement to update the document specifically for December 2024.. Issues: The document is titled for 2025, which may mislead readers about the currency of the information., The integration of December 2024 findings is present but does not clearly indicate that it is an update to the document as requested.
+
+✓ Real-World: Editor - Multi-Document Coordination
+   Category: real_world
+   Execution Time: 28.11s
+
+✗ Real-World: Power User - Complex Multi-Step
+   Category: real_world
+   Execution Time: 19.01s
+   Error: Expected content not found: '## Sources'
+

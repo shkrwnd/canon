@@ -39,6 +39,10 @@ class TestCase:
     expected_not_contains: Optional[List[str]] = None
     description: str = ""
     requires_document: Optional[str] = None  # Document name that must exist for this test
+    # LLM-based document validation (optional)
+    validate_document_content: bool = False  # Enable document content validation
+    validation_requirements: Optional[str] = None  # What to check (e.g., "preserves all sections", "contains latest version")
+    validation_critical: bool = False  # If True, test fails if validation fails
 
 
 @dataclass
@@ -68,6 +72,128 @@ class TestReport:
     summary: Dict[str, Any]
 
 
+class DocumentValidator:
+    """Validates document content using LLM when needed"""
+    
+    def __init__(self, llm_service: Optional[Any] = None):
+        """
+        Initialize validator
+        
+        Args:
+            llm_service: Optional LLMService instance (creates one if None)
+        """
+        self._llm_service = llm_service
+        self._validation_cache = {}  # Cache validation results
+    
+    @property
+    def llm_service(self):
+        """Lazy-load LLM service (only created when needed)"""
+        if self._llm_service is None:
+            # Import here to avoid circular dependencies and only when needed
+            import sys
+            from pathlib import Path
+            
+            # Ensure backend is in path
+            backend_dir = Path(__file__).parent.parent
+            if str(backend_dir) not in sys.path:
+                sys.path.insert(0, str(backend_dir))
+            
+            from app.clients.llm_providers.factory import LLMProviderFactory
+            from app.services.llm_service import LLMService
+            
+            provider = LLMProviderFactory.create_provider()
+            self._llm_service = LLMService(provider)
+        
+        return self._llm_service
+    
+    async def validate(
+        self,
+        document_content: str,
+        user_request: str,
+        requirements: str,
+        cache_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Validate document content against requirements
+        
+        Args:
+            document_content: Document content to validate
+            user_request: Original user request
+            requirements: Validation requirements
+            cache_key: Optional cache key to avoid re-validating same content
+        
+        Returns:
+            Dict with 'passed' (bool), 'reason' (str), 'issues' (list)
+        """
+        # Check cache first
+        if cache_key and cache_key in self._validation_cache:
+            return self._validation_cache[cache_key]
+        
+        # Build validation prompt
+        prompt = f"""Validate if the document meets these requirements:
+
+REQUIREMENTS: {requirements}
+
+ORIGINAL REQUEST: {user_request}
+
+DOCUMENT CONTENT:
+{document_content}
+
+Respond with JSON only:
+{{
+    "passed": true/false,
+    "reason": "brief explanation",
+    "issues": ["specific issues if any"]
+}}"""
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a test validator. Analyze the document and respond with valid JSON only. Be strict but fair."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+        
+        try:
+            # Use the LLM service with rate limiting
+            service = self.llm_service
+            async with service._semaphore:  # Respect rate limiting
+                response = await service.provider.chat_completion(
+                    messages=messages,
+                    temperature=0.1,  # Low temperature for consistency
+                    response_format={"type": "json_object"} if service.provider.supports_json_mode() else None
+                )
+            
+            result = json.loads(response)
+            validation_result = {
+                "passed": result.get("passed", False),
+                "reason": result.get("reason", "No reason provided"),
+                "issues": result.get("issues", [])
+            }
+            
+            # Cache result
+            if cache_key:
+                self._validation_cache[cache_key] = validation_result
+            
+            return validation_result
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"LLM validation error: {e}")
+            return {
+                "passed": False,
+                "reason": f"Validation error: {str(e)}",
+                "issues": []
+            }
+    
+    def clear_cache(self):
+        """Clear validation cache"""
+        self._validation_cache.clear()
+
+
 class AgentTester:
     """Test harness for agent edge cases"""
     
@@ -78,6 +204,14 @@ class AgentTester:
         self.headers = {"Authorization": f"Bearer {auth_token}"}
         self.chat_id: Optional[int] = None
         self.documents: Dict[str, int] = {}  # Map document name to document ID
+        self._validator: Optional[DocumentValidator] = None  # Lazy initialization
+    
+    @property
+    def validator(self) -> DocumentValidator:
+        """Lazy-load validator (only created when needed)"""
+        if self._validator is None:
+            self._validator = DocumentValidator()
+        return self._validator
     
     def setup_test_environment(self):
         """Create test documents before running tests"""
@@ -223,6 +357,9 @@ class AgentTester:
                 expected_web_search=True,
                 expected_should_edit=True,
                 requires_document="Latest Python Features",
+                validate_document_content=True,
+                validation_requirements="Verify that the document contains more verbose descriptions of the latest Python features. The content should be expanded with more detailed explanations while maintaining accuracy about current Python features.",
+                validation_critical=False,  # Warning only - making verbose is subjective
                 description="Should trigger web search even for 'make verbose' if document is about 'latest'"
             ),
             TestCase(
@@ -232,6 +369,9 @@ class AgentTester:
                 expected_web_search=True,
                 expected_should_edit=True,
                 requires_document="Python Guide",
+                validate_document_content=True,
+                validation_requirements="Verify that the document contains information about the latest Python version (should be 3.12 or later as of 2024) and that this information is accurate and well-integrated into the document.",
+                validation_critical=True,
                 description="Should trigger web search for 'latest' information"
             ),
             TestCase(
@@ -258,6 +398,9 @@ class AgentTester:
                 category="document_operations",
                 expected_should_edit=True,
                 requires_document="Python Guide",
+                validate_document_content=True,
+                validation_requirements="Verify that the document contains information about Python data types (like int, str, list, dict, etc.) and that this information is well-integrated. All original sections should be preserved.",
+                validation_critical=True,
                 description="Should successfully edit an existing document"
             ),
             TestCase(
@@ -289,6 +432,9 @@ class AgentTester:
                 expected_should_edit=True,
                 expected_contains=["## Sources"],
                 requires_document="Python Guide",
+                validate_document_content=True,
+                validation_requirements="Verify that the document contains a '## Sources' section with properly formatted URLs, that the sources are relevant to Python version information, and that the latest Python version information is accurate and well-integrated.",
+                validation_critical=True,
                 description="Should include source links when web search is performed"
             ),
             
@@ -459,9 +605,63 @@ class AgentTester:
                             passed = False
                             error_parts.append(f"Unexpected content found: '{not_expected_text}'")
                 
+                # LLM-based document validation (only if enabled and document exists)
+                llm_validation_result = None
+                document = response_data.get("document")
+                document_content = document.get("content") if document else None
+                
+                if (test_case.validate_document_content and 
+                    test_case.validation_requirements and 
+                    document_content):
+                    
+                    # Run async validation
+                    import asyncio
+                    import hashlib
+                    
+                    try:
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    # Create cache key from content hash (avoid re-validating same content)
+                    cache_key = hashlib.md5(
+                        f"{test_case.message}:{test_case.validation_requirements}:{document_content[:100]}".encode()
+                    ).hexdigest()
+                    
+                    llm_validation_result = loop.run_until_complete(
+                        self.validator.validate(
+                            document_content=document_content,
+                            user_request=test_case.message,
+                            requirements=test_case.validation_requirements,
+                            cache_key=cache_key
+                        )
+                    )
+                    
+                    # Check validation result
+                    if not llm_validation_result.get("passed", False):
+                        if test_case.validation_critical:
+                            passed = False
+                            error_parts.append(
+                                f"Document validation failed: {llm_validation_result.get('reason', 'Unknown')}. "
+                                f"Issues: {', '.join(llm_validation_result.get('issues', []))}"
+                            )
+                        else:
+                            # Non-critical: log but don't fail test
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.warning(
+                                f"Document validation warning for '{test_case.name}': "
+                                f"{llm_validation_result.get('reason', 'Unknown')}"
+                            )
+                
                 # Update chat_id for multi-turn conversations
                 if "chat_id" in response_data:
                     self.chat_id = response_data["chat_id"]
+                
+                # Include LLM validation result in decision metadata
+                if llm_validation_result:
+                    decision = {**decision, "llm_validation": llm_validation_result}
                 
                 return TestResult(
                     test_case=test_case,

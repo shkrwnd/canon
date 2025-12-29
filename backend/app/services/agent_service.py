@@ -38,6 +38,269 @@ class AgentService:
         self.web_search_service = WebSearchService(llm_service)
         self.document_service = document_service
     
+    async def _get_or_create_chat(
+        self,
+        user_id: int,
+        request: AgentActionRequest,
+        chat_service: ChatService,
+        span: trace.Span
+    ):
+        """
+        Get existing chat or create new one.
+        Extracted from process_agent_action_with_chat lines 550-589.
+        """
+        chat = None
+        if request.chat_id:
+            with tracer.start_as_current_span("agent.get_chat") as chat_span:
+                chat_span.set_attribute("chat.operation", "get_chat")
+                try:
+                    chat = chat_service.get_chat(user_id, request.chat_id)
+                    chat_span.set_attribute("chat.found", True)
+                    # Validate that the chat belongs to the requested project (if project_id is provided)
+                    if request.project_id and chat.project_id != request.project_id:
+                        # Chat exists but belongs to a different project - create a new chat for this project
+                        logger.info(f"Chat {request.chat_id} belongs to different project, creating new chat")
+                        chat = None
+                        chat_span.set_attribute("chat.project_mismatch", True)
+                except Exception as e:
+                    logger.warning(f"Failed to get chat {request.chat_id}: {e}")
+                    chat_span.set_attribute("chat.found", False)
+                    chat_span.record_exception(e)
+                    chat = None
+        
+        if not chat:
+            # Create new chat - use project_id from request
+            project_id_to_use = request.project_id
+            if not project_id_to_use:
+                raise ValidationError("project_id is required to create a new chat")
+            
+            logger.info(f"Creating new chat for user {user_id}, project_id: {project_id_to_use}")
+            with tracer.start_as_current_span("agent.create_chat") as chat_span:
+                chat_span.set_attribute("chat.operation", "create_chat")
+                chat_span.set_attribute("chat.project_id", project_id_to_use)
+                chat = chat_service.create_chat(
+                    user_id,
+                    ChatCreate(project_id=project_id_to_use)
+                )
+                chat_span.set_attribute("chat.id", chat.id)
+                span.set_attribute("agent.chat_created", True)
+        else:
+            span.set_attribute("agent.chat_created", False)
+        
+        span.set_attribute("agent.chat_id", chat.id)
+        return chat
+    
+    def _store_user_message(
+        self,
+        user_id: int,
+        chat_id: int,
+        message: str,
+        chat_service: ChatService
+    ):
+        """
+        Store user message in chat.
+        Extracted from process_agent_action_with_chat lines 591-605.
+        """
+        logger.debug(f"Storing user message in chat {chat_id}")
+        with tracer.start_as_current_span("agent.store_user_message") as msg_span:
+            msg_span.set_attribute("message.operation", "store_user_message")
+            msg_span.set_attribute("message.chat_id", chat_id)
+            user_message = chat_service.add_message(
+                user_id,
+                chat_id,
+                ChatMessageCreate(
+                    role=MessageRole.USER,
+                    content=message,
+                    metadata={}
+                )
+            )
+            msg_span.set_attribute("message.id", user_message.id)
+        return user_message
+    
+    def _build_chat_history(
+        self,
+        chat_service: ChatService,
+        user_id: int,
+        chat_id: int
+    ) -> List[Dict]:
+        """
+        Build chat history for LLM context.
+        Extracted from process_agent_action_with_chat lines 607-632.
+        """
+        chat_messages_db = chat_service.get_chat_messages(user_id, chat_id)
+        # Filter out the user message we just added to avoid duplication
+        chat_history_for_llm = []
+        for msg in chat_messages_db[:-1]:  # Exclude the last message
+            role = msg.role.value if hasattr(msg.role, 'value') else msg.role
+            content = msg.content
+            # Use message_metadata attribute (column name is "metadata" but attribute is "message_metadata")
+            metadata = msg.message_metadata if msg.message_metadata else {}
+            decision = metadata.get("decision", {}) if isinstance(metadata, dict) else {}
+            
+            # Include decision metadata in history for context
+            history_item = {
+                "role": role,
+                "content": content
+            }
+            
+            # Add context about pending confirmation if present
+            if decision.get("pending_confirmation"):
+                history_item["pending_confirmation"] = True
+                history_item["intent_statement"] = decision.get("intent_statement", "")
+                history_item["document_id"] = decision.get("document_id")
+                history_item["should_edit"] = decision.get("should_edit", False)
+                history_item["should_create"] = decision.get("should_create", False)
+            
+            chat_history_for_llm.append(history_item)
+        
+        return chat_history_for_llm
+    
+    def _get_project_context(
+        self,
+        user_id: int,
+        project_id: Optional[int],
+        span: trace.Span
+    ):
+        """
+        Get project and documents list.
+        Extracted from process_agent_action lines 61-88.
+        Returns: (project, documents_list)
+        """
+        project = None
+        documents_list = []
+        
+        if project_id:
+            with tracer.start_as_current_span("agent.get_project") as db_span:
+                db_span.set_attribute("db.operation", "get_project")
+                project = self.project_repo.get_by_user_and_id(user_id, project_id)
+                if project:
+                    db_span.set_attribute("db.project_found", True)
+                    span.set_attribute("agent.project_name", project.name)
+                else:
+                    db_span.set_attribute("db.project_found", False)
+            
+            if project:
+                with tracer.start_as_current_span("agent.get_project_documents") as db_span:
+                    db_span.set_attribute("db.operation", "get_project_documents")
+                    project_documents = self.document_repo.get_by_project_id(project_id)
+                    db_span.set_attribute("db.result_count", len(project_documents))
+                documents_list = [
+                    {
+                        "id": d.id,
+                        "name": d.name,
+                        "standing_instruction": d.standing_instruction,
+                        "content": d.content
+                    }
+                    for d in project_documents
+                ]
+        
+        return project, documents_list
+    
+    async def _perform_web_search_if_needed(
+        self,
+        decision: Dict[str, Any],
+        user_message: str,
+        project: Optional[Project],
+        span: trace.Span
+    ):
+        """
+        Perform web search if decision indicates it's needed.
+        Extracted from process_agent_action lines 119-160.
+        Returns: WebSearchResult object or None
+        """
+        web_search_result_obj = None
+        
+        # Log web search trigger check
+        needs_web_search = decision.get("needs_web_search", False)
+        search_query = decision.get("search_query")
+        logger.info(f"Web search check: needs_web_search={needs_web_search}, search_query={search_query}")
+        if not needs_web_search:
+            logger.info("Web search not triggered: needs_web_search is False or missing")
+        elif not search_query:
+            logger.info("Web search not triggered: search_query is missing or empty")
+        else:
+            logger.info(f"Web search will be performed with query: {search_query}")
+        
+        # Perform web search if needed (using WebSearchService for retry logic)
+        if decision.get("needs_web_search") and decision.get("search_query"):
+            logger.info(f"Performing web search: {decision['search_query']}")
+            with tracer.start_as_current_span("agent.web_search") as web_span:
+                web_span.set_attribute("web_search.query", decision["search_query"])
+                
+                # Use WebSearchService for search with retry logic
+                web_search_result_obj = await self.web_search_service.search_with_retry(
+                    initial_query=decision["search_query"],
+                    user_message=user_message,
+                    context=f"Project: {project.name if project else 'Unknown'}"
+                )
+                
+                # Get final results (best quality or latest)
+                web_search_results = web_search_result_obj.get_best_results()
+                web_search_performed = len(web_search_result_obj.attempts) > 0
+                
+                web_span.set_attribute("web_search.results_count", len(web_search_results) if web_search_results else 0)
+                web_span.set_attribute("web_search.attempts", len(web_search_result_obj.attempts))
+                web_span.set_attribute("web_search.was_retried", web_search_result_obj.was_retried())
+        else:
+            logger.info("Web search skipped: needs_web_search=False or search_query missing")
+        
+        # Log web search status after check
+        web_search_results = web_search_result_obj.get_best_results() if web_search_result_obj else None
+        logger.info(f"Web search status: performed={web_search_result_obj is not None}, "
+                    f"results_length={len(web_search_results) if web_search_results else 0}, "
+                    f"attempts={len(web_search_result_obj.attempts) if web_search_result_obj else 0}")
+        
+        return web_search_result_obj
+    
+    def _build_response(
+        self,
+        result: Dict[str, Any],
+        agent_message: Any,
+        request: AgentActionRequest,
+        chat: Any,
+        user_id: int
+    ) -> AgentActionResponse:
+        """
+        Build AgentActionResponse from result and agent message.
+        Extracted from process_agent_action_with_chat lines 963-1000.
+        """
+        # Convert updated or created document to schema if exists
+        updated_document_schema = None
+        if result.get("updated_document"):
+            updated_document_schema = DocumentSchema(**result["updated_document"])
+        elif result.get("created_document"):
+            updated_document_schema = DocumentSchema(**result["created_document"])
+        
+        # Publish event for cross-cutting concerns (analytics, monitoring)
+        decision = result["decision"]
+        event_bus.publish(AgentActionCompletedEvent(
+            user_id=user_id,
+            chat_id=chat.id,
+            project_id=request.project_id or chat.project_id,
+            document_id=request.document_id or (result.get("updated_document", {}).get("id") if result.get("updated_document") else None) or (result.get("created_document", {}).get("id") if result.get("created_document") else None),
+            action_type="agent_action",
+            success=result.get("updated_document") is not None or result.get("created_document") is not None,
+            metadata={
+                "should_edit": decision.get("should_edit", False),
+                "should_create": decision.get("should_create", False),
+                "needs_clarification": decision.get("needs_clarification", False),
+                "pending_confirmation": decision.get("pending_confirmation", False),
+                "web_search_performed": result.get("web_search_performed", False),
+                "document_updated": result.get("updated_document") is not None,
+                "document_created": result.get("created_document") is not None,
+                "intent_statement": decision.get("intent_statement"),
+                "change_summary": decision.get("change_summary"),
+                "content_summary": decision.get("content_summary")
+            }
+        ))
+        
+        return AgentActionResponse(
+            document=updated_document_schema,
+            chat_message=ChatMessageSchema.model_validate(agent_message),
+            agent_decision=result["decision"],
+            web_search_performed=result.get("web_search_performed", False)
+        )
+    
     async def process_agent_action(
         self,
         user_id: int,
@@ -59,33 +322,7 @@ class AgentService:
             
             try:
                 # Get project and all documents in it
-                project = None
-                documents_list = []
-                
-                if project_id:
-                    with tracer.start_as_current_span("agent.get_project") as db_span:
-                        db_span.set_attribute("db.operation", "get_project")
-                        project = self.project_repo.get_by_user_and_id(user_id, project_id)
-                        if project:
-                            db_span.set_attribute("db.project_found", True)
-                            span.set_attribute("agent.project_name", project.name)
-                        else:
-                            db_span.set_attribute("db.project_found", False)
-                    
-                    if project:
-                        with tracer.start_as_current_span("agent.get_project_documents") as db_span:
-                            db_span.set_attribute("db.operation", "get_project_documents")
-                            project_documents = self.document_repo.get_by_project_id(project_id)
-                            db_span.set_attribute("db.result_count", len(project_documents))
-                        documents_list = [
-                            {
-                                "id": d.id,
-                                "name": d.name,
-                                "standing_instruction": d.standing_instruction,
-                                "content": d.content
-                            }
-                            for d in project_documents
-                        ]
+                project, documents_list = self._get_project_context(user_id, project_id, span)
                 
                 # Get agent decision (pass project context)
                 project_context = {
@@ -116,48 +353,12 @@ class AgentService:
                 span.set_attribute("agent.decision.document_id", decision.get("document_id"))
                 span.set_attribute("agent.decision.needs_web_search", decision.get("needs_web_search", False))
                 
-                web_search_performed = False
-                web_search_results = None
-                web_search_result_obj = None  # Will hold WebSearchResult object with all attempts
-                
-                # Log web search trigger check
-                needs_web_search = decision.get("needs_web_search", False)
-                search_query = decision.get("search_query")
-                logger.info(f"Web search check: needs_web_search={needs_web_search}, search_query={search_query}")
-                if not needs_web_search:
-                    logger.info("Web search not triggered: needs_web_search is False or missing")
-                elif not search_query:
-                    logger.info("Web search not triggered: search_query is missing or empty")
-                else:
-                    logger.info(f"Web search will be performed with query: {search_query}")
-                
-                # Perform web search if needed (using WebSearchService for retry logic)
-                if decision.get("needs_web_search") and decision.get("search_query"):
-                    logger.info(f"Performing web search: {decision['search_query']}")
-                    with tracer.start_as_current_span("agent.web_search") as web_span:
-                        web_span.set_attribute("web_search.query", decision["search_query"])
-                        
-                        # Use WebSearchService for search with retry logic
-                        web_search_result_obj = await self.web_search_service.search_with_retry(
-                            initial_query=decision["search_query"],
-                            user_message=user_message,
-                            context=f"Project: {project.name if project else 'Unknown'}"
-                        )
-                        
-                        # Get final results (best quality or latest)
-                        web_search_results = web_search_result_obj.get_best_results()
-                        web_search_performed = len(web_search_result_obj.attempts) > 0
-                        
-                        web_span.set_attribute("web_search.results_count", len(web_search_results) if web_search_results else 0)
-                        web_span.set_attribute("web_search.attempts", len(web_search_result_obj.attempts))
-                        web_span.set_attribute("web_search.was_retried", web_search_result_obj.was_retried())
-                else:
-                    logger.info("Web search skipped: needs_web_search=False or search_query missing")
-                
-                # Log web search status after check
-                logger.info(f"Web search status: performed={web_search_performed}, "
-                            f"results_length={len(web_search_results) if web_search_results else 0}, "
-                            f"attempts={len(web_search_result_obj.attempts) if web_search_result_obj else 0}")
+                # Perform web search if needed
+                web_search_result_obj = await self._perform_web_search_if_needed(
+                    decision, user_message, project, span
+                )
+                web_search_performed = web_search_result_obj is not None
+                web_search_results = web_search_result_obj.get_best_results() if web_search_result_obj else None
                 
                 # Rewrite document if decision says so
                 updated_document = None
@@ -548,88 +749,13 @@ class AgentService:
             span.set_attribute("agent.message_length", len(request.message))
             
             # Get or create chat
-            chat = None
-            if request.chat_id:
-                with tracer.start_as_current_span("agent.get_chat") as chat_span:
-                    chat_span.set_attribute("chat.operation", "get_chat")
-                    try:
-                        chat = chat_service.get_chat(user_id, request.chat_id)
-                        chat_span.set_attribute("chat.found", True)
-                        # Validate that the chat belongs to the requested project (if project_id is provided)
-                        if request.project_id and chat.project_id != request.project_id:
-                            # Chat exists but belongs to a different project - create a new chat for this project
-                            logger.info(f"Chat {request.chat_id} belongs to different project, creating new chat")
-                            chat = None
-                            chat_span.set_attribute("chat.project_mismatch", True)
-                    except Exception as e:
-                        logger.warning(f"Failed to get chat {request.chat_id}: {e}")
-                        chat_span.set_attribute("chat.found", False)
-                        chat_span.record_exception(e)
-                        chat = None
-            
-            if not chat:
-                # Create new chat - use project_id from request
-                project_id_to_use = request.project_id
-                if not project_id_to_use:
-                    raise ValidationError("project_id is required to create a new chat")
-                
-                logger.info(f"Creating new chat for user {user_id}, project_id: {project_id_to_use}")
-                with tracer.start_as_current_span("agent.create_chat") as chat_span:
-                    chat_span.set_attribute("chat.operation", "create_chat")
-                    chat_span.set_attribute("chat.project_id", project_id_to_use)
-                    chat = chat_service.create_chat(
-                        user_id,
-                        ChatCreate(project_id=project_id_to_use)
-                    )
-                    chat_span.set_attribute("chat.id", chat.id)
-                    span.set_attribute("agent.chat_created", True)
-            else:
-                span.set_attribute("agent.chat_created", False)
-            
-            span.set_attribute("agent.chat_id", chat.id)
+            chat = await self._get_or_create_chat(user_id, request, chat_service, span)
             
             # Store user message
-            logger.debug(f"Storing user message in chat {chat.id}")
-            with tracer.start_as_current_span("agent.store_user_message") as msg_span:
-                msg_span.set_attribute("message.operation", "store_user_message")
-                msg_span.set_attribute("message.chat_id", chat.id)
-                user_message = chat_service.add_message(
-                    user_id,
-                    chat.id,
-                    ChatMessageCreate(
-                        role=MessageRole.USER,
-                        content=request.message,
-                        metadata={}
-                    )
-                )
-                msg_span.set_attribute("message.id", user_message.id)
+            user_message = self._store_user_message(user_id, chat.id, request.message, chat_service)
             
             # Get chat history for context (excluding the message we just added)
-            chat_messages_db = chat_service.get_chat_messages(user_id, chat.id)
-            # Filter out the user message we just added to avoid duplication
-            chat_history_for_llm = []
-            for msg in chat_messages_db[:-1]:  # Exclude the last message
-                role = msg.role.value if hasattr(msg.role, 'value') else msg.role
-                content = msg.content
-                # Use message_metadata attribute (column name is "metadata" but attribute is "message_metadata")
-                metadata = msg.message_metadata if msg.message_metadata else {}
-                decision = metadata.get("decision", {}) if isinstance(metadata, dict) else {}
-                
-                # Include decision metadata in history for context
-                history_item = {
-                    "role": role,
-                    "content": content
-                }
-                
-                # Add context about pending confirmation if present
-                if decision.get("pending_confirmation"):
-                    history_item["pending_confirmation"] = True
-                    history_item["intent_statement"] = decision.get("intent_statement", "")
-                    history_item["document_id"] = decision.get("document_id")
-                    history_item["should_edit"] = decision.get("should_edit", False)
-                    history_item["should_create"] = decision.get("should_create", False)
-                
-                chat_history_for_llm.append(history_item)
+            chat_history_for_llm = self._build_chat_history(chat_service, user_id, chat.id)
             
             # Process agent action
             result = await self.process_agent_action(
@@ -960,41 +1086,7 @@ class AgentService:
                 )
                 msg_span.set_attribute("message.id", agent_message.id)
             
-            # Convert updated or created document to schema if exists
-            updated_document_schema = None
-            if result.get("updated_document"):
-                updated_document_schema = DocumentSchema(**result["updated_document"])
-            elif result.get("created_document"):
-                updated_document_schema = DocumentSchema(**result["created_document"])
-            
-            # Publish event for cross-cutting concerns (analytics, monitoring)
-            event_bus.publish(AgentActionCompletedEvent(
-                user_id=user_id,
-                chat_id=chat.id,
-                project_id=request.project_id or chat.project_id,
-                document_id=request.document_id or (result.get("updated_document", {}).get("id") if result.get("updated_document") else None) or (result.get("created_document", {}).get("id") if result.get("created_document") else None),
-                action_type="agent_action",
-                success=result.get("updated_document") is not None or result.get("created_document") is not None,
-                metadata={
-                    "should_edit": should_edit,
-                    "should_create": should_create,
-                    "needs_clarification": needs_clarification,
-                    "pending_confirmation": pending_confirmation,
-                    "web_search_performed": result.get("web_search_performed", False),
-                    "document_updated": result.get("updated_document") is not None,
-                    "document_created": result.get("created_document") is not None,
-                    "intent_statement": decision.get("intent_statement"),
-                    "change_summary": decision.get("change_summary"),
-                    "content_summary": decision.get("content_summary")
-                }
-            ))
-            
             span.set_attribute("agent.success", result.get("updated_document") is not None or result.get("created_document") is not None)
             
             # Build and return response
-            return AgentActionResponse(
-                document=updated_document_schema,
-                chat_message=ChatMessageSchema.model_validate(agent_message),
-                agent_decision=result["decision"],
-                web_search_performed=result.get("web_search_performed", False)
-            )
+            return self._build_response(result, agent_message, request, chat, user_id)

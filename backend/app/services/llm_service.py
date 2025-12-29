@@ -78,7 +78,10 @@ class LLMService:
         
         # Add chat history to Stage 1 messages for context
         if chat_history:
-            for msg in chat_history[-5:]:  # Last 5 messages for context
+            from ..config import settings
+            history_window = getattr(settings, 'intent_classification_history_window', 20)
+            
+            for msg in chat_history[-history_window:]:  # Use configurable window
                 role = msg.get("role", "user")
                 if hasattr(role, 'value'):
                     role = role.value

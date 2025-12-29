@@ -1,0 +1,1244 @@
+{
+  "timestamp": "2025-12-29T09:19:21.703591",
+  "total_tests": 50,
+  "passed_tests": 38,
+  "failed_tests": 12,
+  "summary": {
+    "pass_rate": 76.0,
+    "category_stats": {
+      "two_stage_prompting": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "web_search_retry": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "document_validation": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "chat_history": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "document_resolution": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "source_attribution": {
+        "total": 3,
+        "passed": 0,
+        "failed": 3
+      },
+      "confirmation_handling": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "multi_turn": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "standing_instructions": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "edit_scope": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "web_search_quality": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "complex_intent": {
+        "total": 3,
+        "passed": 1,
+        "failed": 2
+      },
+      "error_recovery": {
+        "total": 3,
+        "passed": 2,
+        "failed": 1
+      },
+      "performance": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      },
+      "boundary_conditions": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "real_world": {
+        "total": 4,
+        "passed": 2,
+        "failed": 2
+      }
+    },
+    "average_execution_time": 17.57727708339691
+  },
+  "results": [
+    {
+      "test_name": "Two-Stage: Ambiguous Intent Needs Full Context",
+      "category": "two_stage_prompting",
+      "description": "Should use Stage 1 to classify as edit, then Stage 2 to resolve which document and what to improve. Tests if needs_documents flag works correctly.",
+      "message": "improve the document",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.008254766464233,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "User wants to improve the document related to the Hard Test Cases Project.\n\n\n**Document Content Summary:**\nCreated a new document titled 'Hard Test Cases Project'. This document will serve as a foundation for further improvements and additions related to the project."
+    },
+    {
+      "test_name": "Two-Stage: Simple Greeting Early Exit",
+      "category": "two_stage_prompting",
+      "description": "Should exit early after Stage 1 for simple greetings (token optimization)",
+      "message": "hi",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 1.643225908279419,
+      "expected": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi there! How can I assist you today?"
+    },
+    {
+      "test_name": "Two-Stage: Complex Edit Needs Full Documents",
+      "category": "two_stage_prompting",
+      "description": "Should use Stage 1 to determine needs_documents=true, then Stage 2 with full document content",
+      "message": "update all documents that mention Python to include the latest version",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 17.414520978927612,
+      "expected": {
+        "intent": "edit",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Update all documents that mention Python to include the latest version.\n\n\n**Content Summary:**\nThe document will have updated references to the latest version of Python, ensuring all information is current and accurate.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** As of October 2025, the latest stable release of Python is version 3.14.2, which includes significant enhancements and optimizations. Users can download this version safely from vario"
+    },
+    {
+      "test_name": "Web Search: Low Quality Results Trigger Retry",
+      "category": "web_search_retry",
+      "description": "Should evaluate search quality and retry with different query if results are poor",
+      "message": "what is the current Bitcoin price",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.50352692604065,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current Bitcoin price is $87,577.57 USD as of December 29, 2025. \n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Multiple Retries with Query Refinement",
+      "category": "web_search_retry",
+      "description": "Should retry up to max_retries with progressively refined queries",
+      "message": "what are the latest AI safety regulations in 2025",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.189076900482178,
+      "expected": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest AI safety regulations in 2025 include the Responsible AI Safety and Education Act (RAISE Act), which sets a new standard for AI safety by requiring the largest AI developers to adhere to transparency and safety measures. This act was signed into law in December 2025 and was modified to align more closely with California's AI regulations.\n\n  \n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Retry Disabled Still Works",
+      "category": "web_search_retry",
+      "description": "Should work correctly even if retry is disabled (tests retry logic doesn't break single attempt)",
+      "message": "who is the current president of US",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 8.464619159698486,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current president of the United States is Donald John Trump. He was sworn into office on January 20, 2025. \n\n\n\nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search: Quality Score Below Threshold",
+      "category": "web_search_retry",
+      "description": "Should retry if quality score is below min_quality_score threshold",
+      "message": "what are the latest React hooks best practices",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 9.966588258743286,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest React Hooks best practices include: \n1. Always follow the Rules of Hooks.\n2. Keep related logic together.\n3. Create custom hooks for reusable logic.\n4. Optimize performance by cleaning up side effects to prevent memory leaks.\n5. Do not call hooks conditionally; they must be called at the top level.\n\n  \n\nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Validation: Selective Edit Loses Sections",
+      "category": "document_validation",
+      "description": "Should preserve all sections when doing selective edit. If validation fails, should retry with stronger preservation instructions.",
+      "message": "edit the Python Guide and make the introduction more concise",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 22.653252124786377,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not include a more concise introduction as requested, and it appears to be the original content without any modifications.. Issues: No concise introduction provided., All original sections are preserved, but the requirement to make the introduction more concise was not fulfilled.",
+      "response_preview": "User requested to edit the Python guide to make the introduction more concise.\n\n\n**Content Summary:**\nThe document will be updated to reflect a more succinct introduction regarding the latest version of Python, ensuring it remains relevant and informative for users.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** Python 3.14 was officially released on October 7, 2025, introducing new features and improvements over version 3.13. The main developmen"
+    },
+    {
+      "test_name": "Validation: Full Rewrite Preserves Structure",
+      "category": "document_validation",
+      "description": "Should preserve all section headings even in full rewrite. Validation should catch missing sections.",
+      "message": "rewrite the entire Python Guide with better organization",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 17.885108947753906,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested a complete rewrite of the Python Guide for better organization.\n\n\n**Content Summary:**\nThe document will maintain sections on Python updates, installation instructions, download links, official resources, history, and sources, but will be restructured for clarity and flow.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. This version introdu"
+    },
+    {
+      "test_name": "Validation: Retry After Validation Failure",
+      "category": "document_validation",
+      "description": "If validation fails (sections lost), should retry once with validation_errors included in prompt",
+      "message": "update the Python Guide to remove outdated information",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 13.822252035140991,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document contains outdated information regarding the Python version and its release date, which is set in the future (October 2025).. Issues: The version mentioned (3.14.2) and its release date (October 7, 2025) are not current as of October 2023., The installation instructions reference a video tutorial dated in the future (2025)., The sources include links that reference future events or versions.",
+      "response_preview": "Update the Python Guide to remove outdated information\n\n\n**Content Summary:**\nThe document will be revised to remove references to outdated Python versions and installation instructions. A search for the latest Python version will be conducted to ensure the information is accurate and up-to-date.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** Python 3.14 was officially released on October 7, 2025, introducing new features and improvements over ve"
+    },
+    {
+      "test_name": "Chat History: Confirmation After 3 Messages",
+      "category": "chat_history",
+      "description": "Should use last 5 messages to find pending confirmation from 3 messages ago",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.306488990783691,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "How can I assist you further with your Hard Test Cases Project? Please let me know if you have any specific requests or questions."
+    },
+    {
+      "test_name": "Chat History: Multi-Turn Document Reference",
+      "category": "chat_history",
+      "description": "Should resolve 'that' and 'it' from previous messages in chat history",
+      "message": "add that to it",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 14.797993898391724,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add information to the document about the latest Python version.\n\n\n**Content Summary:**\nThe document will be updated with the most recent Python version details, ensuring that users have access to the latest features and enhancements.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. It introduces significant features and optimizations, fo"
+    },
+    {
+      "test_name": "Chat History: Context Across 5+ Messages",
+      "category": "chat_history",
+      "description": "Should use chat history to identify which document was discussed first",
+      "message": "update the first document we discussed",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 13.646172046661377,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to update the document about the Hard Test Cases Project.\n\n\n**Content Summary:**\nThe document currently contains information about Python 3.14.2, released in October 2025. The update will include the latest version available and any new features or changes since that release.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. This version intr"
+    },
+    {
+      "test_name": "Chat History: Decision Metadata in History",
+      "category": "chat_history",
+      "description": "Should use decision metadata from previous messages to answer 'where' questions",
+      "message": "where did you save that script",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.870626926422119,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I updated the 'Hard Test Cases Project' document. It contains a comprehensive guide on Python, including installation instructions and the latest version information. You can find it in your project documents."
+    },
+    {
+      "test_name": "Document Resolution: Similar Names (Python Guide vs Python guide)",
+      "category": "document_resolution",
+      "description": "Should handle case-insensitive matching when multiple similar names exist",
+      "message": "edit the python guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 14.824726104736328,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to edit the Python guide.\n\n\n**Content Summary:**\nThe document discusses the latest updates and installation instructions for Python. It contains links to resources and download options. The current version needs updating to reflect the most recent release.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025, featuring various enhancements and op"
+    },
+    {
+      "test_name": "Document Resolution: Content-Based Match",
+      "category": "document_resolution",
+      "description": "Should match document by content (travel/itinerary doc) when name not specified",
+      "message": "add hotel recommendations",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 13.794028043746948,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Add hotel recommendations to the Hard Test Cases Project document\n\n\n**Content Summary:**\nAdded a section with hotel recommendations that may be useful for users involved in the Hard Test Cases Project."
+    },
+    {
+      "test_name": "Document Resolution: Context from History",
+      "category": "document_resolution",
+      "description": "Should use conversation history to determine which document to edit",
+      "message": "add more details",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 20.092058181762695,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User wants to add more details about the latest Python version to the Comprehensive Python Guide.\n\n\n**Content Summary:**\nThe update will involve adding the latest Python version details, including any new features and improvements that have been released since the last documented version in October 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest stable version of Python is 3.14, released on October 7, 2025, featuring improvements "
+    },
+    {
+      "test_name": "Document Resolution: Ambiguous Multiple Matches",
+      "category": "document_resolution",
+      "description": "Should handle ambiguity when multiple 'guide' documents exist (may need clarification)",
+      "message": "update the guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 19.61818289756775,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested an update to the Comprehensive Python Guide.\n\n\n**Content Summary:**\nThe document will be updated to include the latest version of Python, ensuring that users have access to the most current features and improvements.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** Python 3.14 was officially released on October 7, 2025, introducing new features and improvements over its predecessor, Python 3.13. The main development focus is now on P"
+    },
+    {
+      "test_name": "Source Attribution: Multiple Web Search Results",
+      "category": "source_attribution",
+      "description": "Should include ALL URLs from web search results in Sources section, even if multiple searches were performed",
+      "message": "edit the Python Guide and add information about the latest Python features, performance improvements, and security updates",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 24.048329830169678,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "User requested to add information about the latest Python features, performance improvements, and security updates to the Python Guide.\n\n\n**Content Summary:**\nThe document will be updated with the latest features, performance improvements, and security updates of Python as of December 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, featuring significant enhancements such as faster startup times, de"
+    },
+    {
+      "test_name": "Source Attribution: Retry Results Include All URLs",
+      "category": "source_attribution",
+      "description": "If web search was retried, should include URLs from ALL attempts in Sources section",
+      "message": "add the latest React performance optimizations to the Python Guide",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 26.457859754562378,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "User requested to add the latest React performance optimizations to the Python Guide.\n\n\n**Content Summary:**\nThe document currently contains information about Python updates and features, and the user wants to include relevant React performance optimizations.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest React performance optimizations 2025`\n**Results Summary:** In 2025, React performance optimization focuses on techniques such as minimizing re-renders, reducing bundle size, and enhanci"
+    },
+    {
+      "test_name": "Source Attribution: Post-Processing Adds Missing Sources",
+      "category": "source_attribution",
+      "description": "If LLM forgets Sources section, post-processing should add it automatically",
+      "message": "edit the Python Guide and add the current Python version",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 24.428734064102173,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'; Document validation failed: The document contains an incorrect Python version information and the release date is in the future, which is not accurate.. Issues: The document states that Python 3.14 was released on October 7, 2025, which is a future date., The current version of Python as of October 2023 should be 3.12, not 3.14.",
+      "response_preview": "Update the Comprehensive Python Guide with the current Python version.\n\n\n**Content Summary:**\nThe existing document contains information about Python 3.14, released in October 2025. The update will include the most current version of Python to keep the guide accurate.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** Python 3.14 was officially released on October 7, 2025, introducing new features and bug fixes. Meanwhile, Python 3.9 will reach its e"
+    },
+    {
+      "test_name": "Confirmation: Yes After Destructive Action Prompt",
+      "category": "confirmation_handling",
+      "description": "Should check last 5 messages for pending_confirmation and execute the intended action",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 24.334881067276,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Update the document about the latest Python features\n\n\n**Content Summary:**\nThe update will include the most recent features introduced in Python up to 2025, ensuring that the document is accurate and up-to-date.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14 was released on October 7, 2025, introducing several enhancements, including native task keywords for simplifying asynchronous jobs, t-strings, deferred annotations, and improve"
+    },
+    {
+      "test_name": "Confirmation: No After Destructive Action Prompt",
+      "category": "confirmation_handling",
+      "description": "Should recognize 'no' as cancellation and not perform the action",
+      "message": "no",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.372220039367676,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Hi! How can I help with your Hard Test Cases Project? This project contains information about test cases. Here are the documents in this project:\n1. Comprehensive Python Guide - contains updates and features about Python programming.\nWhat would you like to work on?"
+    },
+    {
+      "test_name": "Confirmation: Multiple Confirmations in History",
+      "category": "confirmation_handling",
+      "description": "Should use the most recent pending confirmation from chat history",
+      "message": "yes",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 26.375802278518677,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User wants to update the document with the latest Python version.\n\n\n**Content Summary:**\nThe document will be updated to include the latest version of Python, which may change from the previously mentioned version in the document.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025, featuring significant enhancements and optimizations. The current development "
+    },
+    {
+      "test_name": "Multi-Turn: Follow-up Question After Edit",
+      "category": "multi_turn",
+      "description": "Should use chat history to understand what was changed in previous turn",
+      "message": "what did you change",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.479706048965454,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The most recent updates were made to the 'Comprehensive Python Guide' document, which contains detailed information about Python 3.14, its features, and performance improvements. If you need more specific details about the changes, please let me know!"
+    },
+    {
+      "test_name": "Multi-Turn: Reference Previous Content",
+      "category": "multi_turn",
+      "description": "Should resolve 'that' from previous agent response or user message",
+      "message": "add more details about that",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 29.11238670349121,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add more details about the latest Python features.\n\n\n**Content Summary:**\nThe document will include new insights and details about the latest features introduced in Python 3.14, ensuring that the information reflects the most recent developments in Python programming as of 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, introducing significant features such as free-threaded suppor"
+    },
+    {
+      "test_name": "Multi-Turn: Chain of Edits",
+      "category": "multi_turn",
+      "description": "Should understand 'it' refers to the document edited in previous turn",
+      "message": "now make it more concise",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 22.936764001846313,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to make the document more concise.\n\n\n**Content Summary:**\nThe document will be revised to present the latest Python features in a more concise manner while ensuring all information is up-to-date.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several enhancements including faster startup times, deferred annotations, and a new native task keyword for simplifying asynchronous jobs"
+    },
+    {
+      "test_name": "Multi-Turn: Question About Previous Action",
+      "category": "multi_turn",
+      "description": "Should explain reasoning from previous action using chat history",
+      "message": "why did you do that",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.6180100440979,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "I haven't made any changes to the documents recently. If you need assistance with something specific, please let me know!"
+    },
+    {
+      "test_name": "Standing Instructions: Edit Respects Instructions",
+      "category": "standing_instructions",
+      "description": "Should maintain consistency with document's standing instructions when editing",
+      "message": "add a section about advanced topics",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 21.301016092300415,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add a section about advanced topics to the Hard Test Cases Project document.\n\n\n**Content Summary:**\nAdded a section on advanced topics, which may include complex test case strategies, performance testing, and edge case considerations."
+    },
+    {
+      "test_name": "Standing Instructions: Create With Instructions",
+      "category": "standing_instructions",
+      "description": "Should create document with appropriate standing instructions based on document type",
+      "message": "create a technical guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.909718036651611,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "User wants to create a new technical guide.\n\n\n**Document Content Summary:**\nThis document will serve as a comprehensive resource for technical topics. Further details will be added based on user input."
+    },
+    {
+      "test_name": "Edit Scope: Selective Edit Preserves All Sections",
+      "category": "edit_scope",
+      "description": "Should preserve ALL other sections when doing selective edit. Validation should catch any lost sections.",
+      "message": "edit the Python Guide and improve the introduction section",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 33.9586501121521,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not maintain its original structure as it includes additional sections (React Performance Optimizations, Hotel Recommendations, and Sources) that were not part of the original request.. Issues: Additional sections added that were not in the original document., The structure of the document has been altered.",
+      "response_preview": "User requested to improve the introduction section of the Python Guide.\n\n\n**Content Summary:**\nThe introduction will be updated to mention the latest Python version released in 2025 and highlight new features, ensuring that the document remains accurate and relevant.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python, version 3.14, was officially launched on October 7, 2025. This version introduces several key featu"
+    },
+    {
+      "test_name": "Edit Scope: Full Rewrite Preserves Headings",
+      "category": "edit_scope",
+      "description": "Even in full rewrite, should preserve all section headings and structure",
+      "message": "rewrite the entire Python Guide with better structure",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 32.74317407608032,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document does not preserve the original section headings as required. The section 'Hotel Recommendations' and 'History' are not part of the original request and disrupt the intended structure.. Issues: Additional sections 'Hotel Recommendations' and 'History' were added, which were not part of the original headings.",
+      "response_preview": "User requested a full rewrite of the Python Guide document.\n\n\n**Content Summary:**\nThe existing Python Guide will be restructured and rewritten to improve comprehensibility and incorporate the latest features and updates of Python as of 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major version of Python, 3.14, was released on October 7, 2025, featuring significant enhancements and optimizations. The current development focus i"
+    },
+    {
+      "test_name": "Edit Scope: Selective After Failed Full",
+      "category": "edit_scope",
+      "description": "If full rewrite fails validation, retry should use selective scope to preserve content",
+      "message": "completely rewrite the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 35.26068091392517,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested a complete rewrite of the Python Guide document.\n\n\n**Content Summary:**\nThe rewritten guide will include updated sections on Python's features, improvements, and best practices as of 2025, ensuring it is comprehensive and relevant for users.\n\n\n**Note:** Missing sections from original: Comprehensive Python Guide\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python is version 3.14, which was officially la"
+    },
+    {
+      "test_name": "Web Search Quality: Evaluate Relevance",
+      "category": "web_search_quality",
+      "description": "Should evaluate if search results are relevant to the query and retry if quality is low",
+      "message": "what are the latest TypeScript features",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 10.882023811340332,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest TypeScript features in 2025 include enhanced type inference, the satisfies operator, module augmentation for third-party extensions, template literal types, a blazing-fast tsgo compiler, and real resource management with the using keyword. Additionally, there are improvements in developer experience through smarter inference that reduces boilerplate and stricter safety measures.\n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Web Search Quality: Summarize Results",
+      "category": "web_search_quality",
+      "description": "Should summarize web search results if summarization is enabled",
+      "message": "what are the current best practices for React state management",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 12.281896114349365,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current best practices for React state management in 2025 include:\n\n1. **Use `useState` for simple local state**: This is ideal for managing straightforward state needs within components.\n2. **Use `useReducer` for complex local state logic**: This approach is beneficial when state management becomes more intricate and requires a structured way to handle state transitions.\n3. **Use Context API for global state management**: The Context API is great for sharing state across multiple components"
+    },
+    {
+      "test_name": "Complex Intent: Edit + Web Search + Source Attribution",
+      "category": "complex_intent",
+      "description": "Combines edit intent, web search trigger, and source attribution - tests full flow",
+      "message": "edit the document about latest Python features, make it more comprehensive, and ensure all information is current",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 26.81141686439514,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Expected content not found: '## Sources'; Document validation failed: The document does not contain current and up-to-date information as it references a future date (October 2025) for Python 3.14, which is not valid as of October 2023. Additionally, the document lacks a comprehensive coverage of multiple aspects of the latest Python features.. Issues: References a future version of Python (3.14) that is not available as of October 2023., Does not cover multiple aspects of Python features comprehensively., The structure is generally good, but the content is outdated.",
+      "response_preview": "User requested to edit the document about the latest Python features, ensuring all information is current.\n\n\n**Content Summary:**\nUpdated the document to include the latest features of Python 3.14 and any relevant changes or improvements made in 2025.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, featuring significant enhancements such as faster startup times, deferred annotations, and a new native tas"
+    },
+    {
+      "test_name": "Complex Intent: Create + Web Search + Content Generation",
+      "category": "complex_intent",
+      "description": "Combines create intent, web search, content generation, and source attribution",
+      "message": "create a comprehensive guide about the latest AI developments in 2025",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 12.206339120864868,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": "Web search mismatch: expected True, got False; Expected content not found: '## Sources'; Document validation failed: The document does not contain a '## Sources' section with relevant URLs, and the 'References' section is not properly labeled as '## Sources'.. Issues: Missing '## Sources' section with relevant URLs, References section is not properly labeled",
+      "response_preview": "Create a comprehensive guide about the latest AI developments in 2025.\n\n\n**Document Content Summary:**\nThe newly created document provides an overview of significant AI advancements in 2025. It discusses enhancements in generative AI, integration in healthcare, ethical considerations, improvements in natural language processing, and developments in autonomous systems, emphasizing their societal implications."
+    },
+    {
+      "test_name": "Complex Intent: Multi-Step Implicit Request",
+      "category": "complex_intent",
+      "description": "Tests if agent can handle implicit multi-step requests (may need clarification or do sequentially)",
+      "message": "update the Python Guide with the latest version and also create a quick reference card",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 34.22067093849182,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": true
+      },
+      "error_message": null,
+      "response_preview": "Update the Python Guide with the latest version and create a quick reference card.\n\n\n**Document Content Summary:**\nUpdated the Python Guide with the latest version of Python, which is 3.14, and created a new quick reference card that highlights essential features and performance improvements.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python version 2025`\n**Results Summary:** The latest major release of Python is version 3.14, which was officially launched on October 7, 2025. Additio"
+    },
+    {
+      "test_name": "Error Recovery: Document Not Found Graceful Handling",
+      "category": "error_recovery",
+      "description": "Should recognize edit intent even if document doesn't exist, provide helpful error message",
+      "message": "edit the document called DefinitelyDoesNotExist12345",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 4.754255056381226,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": "Should edit mismatch: expected True, got False",
+      "response_preview": "It seems that the document you mentioned, 'DefinitelyDoesNotExist12345', does not exist in the project. Please check the document name or provide a different request."
+    },
+    {
+      "test_name": "Error Recovery: Validation Failure Retry",
+      "category": "error_recovery",
+      "description": "If validation fails (sections lost), should retry with validation errors and succeed on retry",
+      "message": "rewrite the Python Guide completely",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 28.44951295852661,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested a complete rewrite of the Python Guide.\n\n\n**Content Summary:**\nThe guide will be rewritten to reflect the latest advancements and features in Python, ensuring it is up-to-date with the current standards and practices as of December 2025.\n\n\n**Note:** Missing sections from original: In-Depth Python Guide\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several significant enhancemen"
+    },
+    {
+      "test_name": "Error Recovery: Web Search Failure",
+      "category": "error_recovery",
+      "description": "Should handle web search failures gracefully and still provide response",
+      "message": "what is the current price of a non-existent cryptocurrency XYZ123",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 16.31083917617798,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The current price of the non-existent cryptocurrency XYZ123 is not listed in the provided search results. \n\n  \nIf you have any more questions or need assistance with something else, feel free to ask!"
+    },
+    {
+      "test_name": "Performance: Large Document Edit",
+      "category": "performance",
+      "description": "Should handle editing large documents efficiently (tests document truncation logic)",
+      "message": "edit the Python Guide and add a comprehensive FAQ section",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 31.598155975341797,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to add a comprehensive FAQ section to the Python Guide.\n\n\n**Content Summary:**\nThe FAQ section will address common questions regarding Python 3.14, including its new features and improvements, ensuring that users have access to the most relevant and current information.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several notable features, including a native task keyword for s"
+    },
+    {
+      "test_name": "Performance: Multiple Documents Context",
+      "category": "performance",
+      "description": "Should efficiently analyze multiple documents without loading full content unnecessarily",
+      "message": "which document has the most content about Python",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 5.37404990196228,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The document with the most content about Python is the 'Comprehensive Python Guide'. It covers various aspects of Python, including its introduction, updates, key features, and performance enhancements."
+    },
+    {
+      "test_name": "Boundary: Exactly 5 Messages in History",
+      "category": "boundary_conditions",
+      "description": "Should correctly use last 5 messages (boundary of history length)",
+      "message": "what did you do 5 messages ago",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 4.160161018371582,
+      "expected": {
+        "intent": "conversation",
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": false,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Five messages ago, I provided a summary of the documents in your Hard Test Cases Project, which includes information about the Comprehensive Python Guide, AI Developments 2025, and the Quick Reference Card for Python 3.14. If you need more details or assistance with a specific document, feel free to ask!"
+    },
+    {
+      "test_name": "Boundary: Empty Document Edit",
+      "category": "boundary_conditions",
+      "description": "Should handle editing documents with minimal or empty content",
+      "message": "edit the Python Guide",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 35.4212851524353,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": true,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Edit the Python Guide to include the latest features.\n\n\n**Content Summary:**\nThe document will be enhanced by incorporating the most recent advancements and features introduced in Python 3.14, ensuring the content reflects the latest updates and improvements in the language.\n\n\n**Note:** Missing sections from original: Comprehensive Python Guide\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** In October 2025, Python 3.14 was released, featuring en"
+    },
+    {
+      "test_name": "Boundary: Maximum Web Search Retries",
+      "category": "boundary_conditions",
+      "description": "Should respect max_retries limit and not exceed it even if quality is still low",
+      "message": "what are the latest developments in quantum computing error correction",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 10.472968816757202,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "conversation",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "The latest developments in quantum computing error correction include Chinese researchers demonstrating fault-tolerant quantum error correction below the threshold using an all-microwave control approach. Additionally, Microsoft is advancing the field by developing four-dimensional (4D) error-correction codes that can be applied to various types of qubits. Furthermore, scientists have created new methods using microwave pulses to correct common quantum computing errors, which could enhance the r"
+    },
+    {
+      "test_name": "Real-World: Writer Workflow - Iterative Refinement",
+      "category": "real_world",
+      "description": "Simulates real writer workflow: iterative refinement of document sections",
+      "message": "make the introduction more engaging",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 32.448994874954224,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "User requested to make the introduction of the Python guide more engaging.\n\n\n**Content Summary:**\nThe introduction will be revised to capture the reader's attention better, possibly by incorporating more dynamic language and examples that resonate with current trends in Python programming.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several significant features including a native task keywo"
+    },
+    {
+      "test_name": "Real-World: Researcher - Fact Verification",
+      "category": "real_world",
+      "description": "Simulates researcher workflow: fact-checking and updating with latest information",
+      "message": "update the research document with the latest findings from December 2024",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 25.505897998809814,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": true,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": "Document validation failed: The document contains information about findings from December 2024, but it is presented as part of a guide for 2025, which does not align with the requirement to update the document specifically for December 2024.. Issues: The document is titled for 2025, which may mislead readers about the currency of the information., The integration of December 2024 findings is present but does not clearly indicate that it is an update to the document as requested.",
+      "response_preview": "Update the AI Developments 2025 document with the latest findings from December 2024.\n\n\n**Content Summary:**\nThe document will be enhanced with the latest AI developments from December 2024, ensuring it reflects the most current trends and advancements in the field.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest AI developments December 2025`\n**Results Summary:** In December 2025, significant advancements in AI include the launch of Google's Gemini 3, a state-of-the-art multimodal model,"
+    },
+    {
+      "test_name": "Real-World: Editor - Multi-Document Coordination",
+      "category": "real_world",
+      "description": "Simulates editor workflow: maintaining consistency across multiple documents (may need clarification)",
+      "message": "ensure all documents use consistent terminology",
+      "passed": true,
+      "response_status": 200,
+      "execution_time": 28.114092111587524,
+      "expected": {
+        "intent": null,
+        "web_search": null,
+        "should_edit": null,
+        "should_create": null
+      },
+      "actual": {
+        "intent": "edit",
+        "web_search": false,
+        "should_edit": true,
+        "should_create": false
+      },
+      "error_message": null,
+      "response_preview": "Ensure all documents use consistent terminology\n\n\n**Content Summary:**\nThe process will involve checking the existing documents for terminology discrepancies and making necessary adjustments to ensure a uniform language is used throughout the Hard Test Cases Project."
+    },
+    {
+      "test_name": "Real-World: Power User - Complex Multi-Step",
+      "category": "real_world",
+      "description": "Simulates power user: complex request with multiple requirements",
+      "message": "create a guide about the latest Python features, make it comprehensive, include examples, and add source links",
+      "passed": false,
+      "response_status": 200,
+      "execution_time": 19.01265811920166,
+      "expected": {
+        "intent": null,
+        "web_search": true,
+        "should_edit": null,
+        "should_create": true
+      },
+      "actual": {
+        "intent": "create",
+        "web_search": true,
+        "should_edit": false,
+        "should_create": true
+      },
+      "error_message": "Expected content not found: '## Sources'",
+      "response_preview": "Create a comprehensive guide about the latest Python features.\n\n\n**Document Content Summary:**\nThe document includes an introduction to Python 3.14, details on key features such as free-threaded Python, deferred annotations, the native task keyword, and T-Strings, along with performance enhancements and upgrade recommendations.\n\n\n**Web Search Details:**\n\n**Search Query 1:** `latest Python features 2025`\n**Results Summary:** Python 3.14, released on October 7, 2025, introduces several notable fea"
+    }
+  ]
+}

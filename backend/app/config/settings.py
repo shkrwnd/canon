@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     telemetry_exporter: str = "jaeger"  # "console", "jaeger", or "both"
     jaeger_agent_host: str = "localhost"
     jaeger_agent_port: int = 14268
+    # Prompt Engineering
+    intent_classification_prompt_version: str = "contextual"  # "contextual" or "rule_based"
+    intent_classification_history_window: int = 20  # Number of recent messages to include
     
     class Config:
         env_file = ".env"

@@ -39,15 +39,15 @@ class PromptService:
         return "\n".join(docs)
     
     @staticmethod
-    def classify_intent(
+    def classify_intent_rule_based(
         user_message: str,
         documents: list,
         project_context: Optional[Dict] = None,
         chat_history: Optional[List[Dict]] = None
     ) -> str:
         """
-        Stage 1: Fast intent classification prompt
-        Returns prompt for classifying user intent with conversation context
+        Original rule-based intent classification.
+        Kept for backward compatibility and as fallback.
         """
         project_info = ""
         if project_context:
@@ -150,6 +150,175 @@ Response JSON:
 }}"""
         
         return prompt
+    
+    @staticmethod
+    def classify_intent_contextual(
+        user_message: str,
+        documents: list,
+        project_context: Optional[Dict] = None,
+        chat_history: Optional[List[Dict]] = None
+    ) -> str:
+        """
+        Contextual intent classification - simpler, more natural prompt that trusts LLM understanding.
+        Uses hybrid approach: last N messages + original intent search.
+        """
+        from ..config import settings
+        
+        project_info = ""
+        if project_context:
+            description = project_context.get('description') or ''
+            description_preview = description[:100] if description else ''
+            project_info = f"Project: {project_context.get('name', 'Unknown')} - {description_preview}"
+        
+        doc_names = [d['name'] for d in documents[:5]] if documents else []
+        doc_list = ", ".join(doc_names) if doc_names else "None"
+        
+        # Get history window from settings (default 20)
+        history_window = getattr(settings, 'intent_classification_history_window', 20)
+        
+        # Build conversation context - hybrid approach
+        conversation_context = ""
+        if chat_history:
+            # Use last N messages for recent context
+            recent_messages = chat_history[-history_window:]
+            
+            # Search for original create/edit intent in full history (from most recent backwards)
+            original_intent_message = None
+            original_intent_type = None
+            for msg in reversed(chat_history):
+                role = msg.get("role", "user")
+                if hasattr(role, 'value'):
+                    role = role.value
+                elif not isinstance(role, str):
+                    role = str(role).lower()
+                
+                if role == "user" or role == "USER":
+                    content = msg.get("content", "")
+                    content_lower = content.lower()
+                    
+                    # Check for create intent
+                    if any(word in content_lower for word in ["create", "make a new", "write a", "new document"]):
+                        original_intent_message = msg
+                        original_intent_type = "create"
+                        break
+                    # Check for edit intent
+                    elif any(word in content_lower for word in ["edit", "add", "update", "change", "save"]):
+                        original_intent_message = msg
+                        original_intent_type = "edit"
+                        break
+            
+            conversation_context = "\n\nCONVERSATION HISTORY:\n"
+            
+            # Include original intent message if found and not already in recent messages
+            if original_intent_message:
+                original_in_recent = any(
+                    msg.get("content") == original_intent_message.get("content")
+                    for msg in recent_messages
+                )
+                
+                if not original_in_recent:
+                    content = original_intent_message.get("content", "")
+                    # Find position in history
+                    original_index = next(
+                        (i for i, msg in enumerate(chat_history) if msg == original_intent_message),
+                        -1
+                    )
+                    messages_ago = len(chat_history) - original_index if original_index >= 0 else "unknown"
+                    conversation_context += f"user: {content} [ORIGINAL {original_intent_type.upper()} REQUEST - {messages_ago} messages ago]\n"
+                    conversation_context += "...\n"  # Indicate gap in messages
+            
+            # Then include recent messages
+            for msg in recent_messages:
+                role = msg.get("role", "user")
+                if hasattr(role, 'value'):
+                    role = role.value
+                elif not isinstance(role, str):
+                    role = str(role).lower()
+                content = msg.get("content", "")
+                
+                # Include pending confirmation context if present
+                if msg.get("pending_confirmation"):
+                    intent = msg.get("intent_statement", "")
+                    conversation_context += f"{role}: {content} [PENDING CONFIRMATION: {intent}]\n"
+                else:
+                    conversation_context += f"{role}: {content}\n"
+        else:
+            conversation_context = "\n\nCONVERSATION HISTORY: No previous messages\n"
+        
+        prompt = f"""Classify the user's intent based on their message and the conversation context.
+
+{conversation_context}
+
+CURRENT MESSAGE: "{user_message}"
+
+PROJECT CONTEXT:
+{project_info}
+Available documents: {doc_list}
+
+Intent types:
+- "conversation": User wants information, answers, discussion, or content displayed in chat
+  * Questions, greetings, explanations
+  * "summarize/print/show [document] here" or "in chat" → user wants response in chat, not document action
+  * "tell me about [document]" → user wants info in chat
+  * General knowledge questions without document context
+  
+- "edit": User wants to modify an existing document
+  * Action words: add, update, change, remove, edit, delete, save, put
+  * "save it/that/this" → save content from conversation to document
+  
+- "create": User wants to create a new document
+  * Action words: create, make, new document, write
+  * "create a [noun]" → create new document
+  
+- "clarify": Request is too vague to determine intent
+
+IMPORTANT GUIDELINES:
+1. Use conversation history to understand context:
+   - If user previously mentioned creating/editing something (see [ORIGINAL REQUEST] above), follow-up messages like "yes", "this is not enough", "make it better" should maintain that original intent
+   - Understand what "it", "that", "here" refer to from context
+   - Track the original request through the conversation
+
+2. Hard rules (for edge cases):
+   - "where did you [action]" = conversation (question about past action, not new action)
+   - "what did you [action]" = conversation (question about past action)
+   - Message contains "here" or "in chat" = conversation (user wants response in chat)
+   - Pure questions without action words = conversation
+
+3. Trust your natural understanding of conversation flow and context
+
+Response JSON:
+{{
+    "intent_type": "conversation"|"edit"|"create"|"clarify",
+    "confidence": 0.0-1.0,
+    "needs_documents": boolean  // true if need full doc content for decision
+}}"""
+        
+        return prompt
+    
+    @staticmethod
+    def classify_intent(
+        user_message: str,
+        documents: list,
+        project_context: Optional[Dict] = None,
+        chat_history: Optional[List[Dict]] = None
+    ) -> str:
+        """
+        Intent classification - uses version based on settings.
+        Falls back to contextual if version not specified.
+        """
+        from ..config import settings
+        
+        prompt_version = getattr(settings, 'intent_classification_prompt_version', 'contextual')
+        
+        if prompt_version == "contextual":
+            return PromptService.classify_intent_contextual(
+                user_message, documents, project_context, chat_history
+            )
+        else:
+            # Use original rule-based prompt
+            return PromptService.classify_intent_rule_based(
+                user_message, documents, project_context, chat_history
+            )
     
     @staticmethod
     def get_agent_decision_prompt(
