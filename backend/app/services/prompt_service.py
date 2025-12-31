@@ -582,6 +582,19 @@ Provide helpful response:
   * CRITICAL: When web search results are provided, use SPECIFIC information from the results, not generic/vague answers
   * Include specific names, dates, events, and details from the web search results
   * DO NOT give generic answers like "there were some changes" - provide actual specific information
+- **Actionable advice/strategy questions**: Use web search for current, practical advice
+  * Semantic patterns that indicate actionable advice requests:
+    - Questions asking "what can I do", "what should I do", "how can I", "how do I", "how to"
+    - Questions asking "what do [people/group] do" to achieve something
+    - Questions asking for strategies, tips, steps, methods, or techniques
+    - Questions asking "what works", "what's effective", "best practices"
+    - Questions seeking practical, actionable information rather than just factual knowledge
+  * **Rule**: If question seeks actionable steps, strategies, tips, or practical advice → needs_web_search: true
+  * Generate search_query based on the topic and action requested (e.g., if user asks "what do X do to Y", search for "X strategies to Y" or "how to Y as X")
+  * Answer directly based on web search results or your knowledge
+  * CRITICAL: When web search results are provided, use SPECIFIC information from the results, not generic/vague answers
+  * Include specific names, dates, events, and details from the web search results
+  * DO NOT give generic answers like "there were some changes" - provide actual specific information
 - Greetings: Include project summary + doc list
 - Questions about documents: Answer based on doc content and conversation history
   * "where did you make/create/save" → Tell user which document was created/updated
@@ -1025,7 +1038,9 @@ Answer now:""")
             else:
                 prompt_parts.append(f"""Helpful assistant for document management.
 
-User: "{user_message}"
+CURRENT USER QUESTION (answer this one): "{user_message}"
+
+CRITICAL: Answer the question above. Chat history below is for context only - do not answer previous questions.
 """)
             
             # Add context if available

@@ -421,9 +421,11 @@ class LLMService:
             system_content = """You are a helpful assistant. Web search has ALREADY been performed and results are provided below. 
 Your job is to answer the user's question DIRECTLY using the web search results provided. 
 DO NOT say "I will search" or "Let me look that up" - the search is already done. 
-Extract the answer from the web search results and provide it immediately."""
+Extract the answer from the web search results and provide it immediately.
+CRITICAL: Answer the CURRENT question in the prompt, not questions from chat history. Chat history is for context only."""
         else:
-            system_content = "You are a helpful, friendly assistant that helps users manage their documents. Respond naturally and conversationally."
+            system_content = """You are a helpful, friendly assistant that helps users manage their documents. Respond naturally and conversationally.
+CRITICAL: Answer the CURRENT question in the prompt, not questions from chat history. Chat history is for context only."""
         
         messages = [
             {
