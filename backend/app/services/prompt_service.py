@@ -362,8 +362,12 @@ Action types:
   * Intent: User wants to know something, not do something
   * Questions seeking information, explanations, or understanding
   * General knowledge questions without document context
+  * **Personal statements/emotions**: "i am feeling sad", "i'm tired", "i'm happy" → ANSWER_ONLY with empty targets []
+  * **Casual conversation**: "how are you", "good morning", "nice weather" → ANSWER_ONLY with empty targets []
+  * **Messages unrelated to documents**: Any message with no document-related intent → ANSWER_ONLY with empty targets []
   * Follow-up questions that seek information (even if referencing previous suggestions) = ANSWER_ONLY
   * **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
+  * **Key principle**: If message has no document-related intent → ANSWER_ONLY with empty targets []
   
 - LIST_DOCUMENTS: User wants to see list of documents
   * "list documents", "show all documents", "what documents do I have"
@@ -374,7 +378,17 @@ Action types:
   * Use when query could reasonably be interpreted as multiple different actions
 
 IMPORTANT GUIDELINES:
-1. Use conversation history to understand context:
+1. **CRITICAL: Filter out non-document messages:**
+   - **Personal statements/emotions**: "i am feeling sad", "i'm tired", "i'm happy", "i feel anxious" → ANSWER_ONLY with empty targets []
+   - **Casual conversation**: "how are you", "nice weather", "good morning", "thanks" → ANSWER_ONLY with empty targets []
+   - **Messages completely unrelated to documents**: Any message that has no connection to document content, actions, or questions about documents → ANSWER_ONLY with empty targets []
+   - **Rule**: Only match documents if the user's message is actually about document content, actions, or questions about documents
+   - **Rule**: If message has no document-related intent, use empty targets array []
+   - **Rule**: Do NOT try to find connections where none exist - if a message is clearly personal/casual/unrelated, do not match it to documents
+
+2. Use conversation history to understand context:
+   - **Use chat history to resolve ambiguity**: If the current message is ambiguous (e.g., "add it", "update that"), use history to understand what "it" or "that" refers to
+   - **But extract intent from current message**: The intent_statement should describe what the user wants in THIS message, even if context from history helps you understand it
    - If user previously mentioned creating/editing something (see [ORIGINAL REQUEST] above), follow-up messages should maintain that original intent IF they are action requests
    - **CRITICAL: Distinguish QUESTIONS (seeking information) from ACTION REQUESTS (requesting to do something):**
      * QUESTIONS → ANSWER_ONLY:
@@ -391,18 +405,23 @@ IMPORTANT GUIDELINES:
    - **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
    - Understand what "it", "that", "here" refer to from context
    - Track the original request through the conversation
+   - **Key principle for intent_statement**: Describe what the user wants in the CURRENT message, using context from history to understand references, but not copying intent from previous messages
 
-2. Hard rules (for edge cases):
+3. Hard rules (for edge cases):
    - Questions about past actions ("where did you", "what did you") = ANSWER_ONLY
    - Message contains "here" or "in chat" = SHOW_DOCUMENT or ANSWER_ONLY (user wants response in chat)
    - Pure questions without action words = ANSWER_ONLY
 
-3. Document matching for targets:
+4. Document matching for targets:
+   - **CRITICAL**: Only include documents in targets if the user's message is actually related to those documents
+   - **CRITICAL**: If message is personal/emotional/casual conversation → empty targets []
+   - **CRITICAL**: Do NOT match documents if message is unrelated (e.g., "i am feeling sad" has nothing to do with any document)
    - Match user's document references to document names from the list above
    - Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
    - "primary": Main document(s) needed for the action
    - "secondary": Additional documents for context or reference
    - If user says "the guide" and there's a document with "guide" in name/summary → match it
+   - **Do NOT force document matches** - only match when there's a clear, legitimate connection
 
 Response JSON:
 {{
@@ -425,10 +444,21 @@ Response JSON:
         - Examples: "do something", "fix it" (unclear what), vague references without context
       * If confidence < 0.5, strongly consider using NEEDS_CLARIFICATION action
       * **Key principle**: Lower confidence for ambiguous queries, especially those that could be questions OR actions
-    "intent_statement": "Brief statement of what the user wants"
+    "intent_statement": "Brief statement of what the user wants IN THE CURRENT MESSAGE"
+      * **CRITICAL**: This must describe the intent of the CURRENT MESSAGE, not previous messages
+      * Use chat history to understand context and resolve ambiguity (e.g., "it" refers to what?)
+      * But the intent_statement should describe what the user wants NOW, in this specific message
+      * Examples:
+        - Current: "can you remember my phone number - 9910868245" → "User wants me to remember/store their phone number"
+        - Current: "add it to the document" (where "it" refers to previous suggestion) → "User wants to add the previously mentioned content to a document"
+        - Current: "i am feeling sad" → "User is expressing feelings of sadness"
+      * **Do NOT** copy intent from previous messages - extract intent from the CURRENT message, even if context helps understand it
 }}
 
 Targets array:
+- **CRITICAL**: Only include documents if the user's message is actually related to those documents
+- **CRITICAL**: Use empty array [] for personal statements, emotions, casual conversation, or any message unrelated to documents
+- **CRITICAL**: Do NOT match documents if message is unrelated (e.g., "i am feeling sad" has nothing to do with any document)
 - Match user's question/intent to relevant documents by name and content summary
 - "document_name": Exact name from the "Available documents" list above
 - "summary": Brief description of why this document is relevant (what it contains that answers the question)
@@ -436,6 +466,7 @@ Targets array:
 - "secondary": Additional documents for context or reference
 - Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
 - Empty array [] if no documents are relevant to the question/action
+- **Do NOT force document matches** - only match when there's a clear, legitimate connection
 - For CREATE_DOCUMENT: targets array should be empty
 - For UPDATE_DOCUMENT: targets should contain the document to be updated
 - For SHOW_DOCUMENT: targets should contain the document(s) to show
