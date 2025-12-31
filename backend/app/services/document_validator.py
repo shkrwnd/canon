@@ -5,19 +5,26 @@ This module provides validators for different document operations,
 following the Cursor-style strategy of validating structure, not reasoning.
 """
 import re
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any, Set
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class ValidationResult:
-    """Result of document validation"""
+    """Result of document validation with change tracking"""
     
-    def __init__(self, is_valid: bool, errors: List[str], warnings: List[str] = None):
+    def __init__(
+        self, 
+        is_valid: bool, 
+        errors: List[str], 
+        warnings: List[str] = None,
+        change_details: Optional[Dict[str, Any]] = None
+    ):
         self.is_valid = is_valid
         self.errors = errors
         self.warnings = warnings or []
+        self.change_details = change_details or {}
     
     def __bool__(self):
         return self.is_valid
@@ -26,6 +33,50 @@ class ValidationResult:
         if self.is_valid:
             return "Validation passed"
         return f"Validation failed: {', '.join(self.errors)}"
+    
+    def get_intent_checkable_errors(self) -> List[Dict[str, Any]]:
+        """
+        Extract errors that might be intentional based on user request.
+        Returns list of error details that can be checked against user intent.
+        """
+        checkable = []
+        
+        for error in self.errors:
+            error_lower = error.lower()
+            
+            # Section removal errors
+            if "lost" in error_lower and "sections" in error_lower:
+                checkable.append({
+                    "type": "section_removal",
+                    "error": error,
+                    "missing_sections": self.change_details.get("missing_sections", [])
+                })
+            
+            # Structural change errors
+            elif "structure significantly changed" in error_lower:
+                checkable.append({
+                    "type": "structural_change",
+                    "error": error,
+                    "original_section_count": self.change_details.get("original_section_count", 0),
+                    "new_section_count": self.change_details.get("new_section_count", 0)
+                })
+            
+            # Content reduction errors
+            elif ("too short" in error_lower or 
+                  ("lost" in error_lower and "% of content" in error)):
+                checkable.append({
+                    "type": "content_reduction",
+                    "error": error,
+                    "original_length": self.change_details.get("original_length", 0),
+                    "new_length": self.change_details.get("new_length", 0),
+                    "reduction_pct": self.change_details.get("reduction_pct", 0)
+                })
+        
+        return checkable
+    
+    def has_intent_checkable_errors(self) -> bool:
+        """Check if there are any errors that should be validated against user intent"""
+        return len(self.get_intent_checkable_errors()) > 0
 
 
 class DocumentValidator:
@@ -113,10 +164,22 @@ class DocumentValidator:
             strict: If True, enforce stricter validation rules
         
         Returns:
-            ValidationResult with is_valid, errors, and warnings
+            ValidationResult with is_valid, errors, warnings, and change_details
         """
         errors = []
         warnings = []
+        
+        # Track changes for intent validation
+        original_headings = set(DocumentValidator.extract_headings(original_content))
+        new_headings = set(DocumentValidator.extract_headings(new_content))
+        missing_sections = list(original_headings - new_headings)
+        added_sections = list(new_headings - original_headings)
+        
+        original_length = len(original_content) if original_content else 0
+        new_length = len(new_content) if new_content else 0
+        reduction_pct = 0
+        if original_length > 0:
+            reduction_pct = ((original_length - new_length) / original_length) * 100
         
         # Check 1: Is it valid markdown?
         if not DocumentValidator.is_valid_markdown(new_content):
@@ -128,10 +191,6 @@ class DocumentValidator:
                 errors.append(f"Found placeholder in output: {placeholder}")
         
         # Check 3: Did we preserve structure? (ERROR if significant sections lost)
-        original_headings = set(DocumentValidator.extract_headings(original_content))
-        new_headings = set(DocumentValidator.extract_headings(new_content))
-        
-        missing_sections = original_headings - new_headings
         if missing_sections and original_headings:
             # Calculate percentage of sections lost
             sections_lost_pct = len(missing_sections) / len(original_headings) * 100
@@ -140,13 +199,13 @@ class DocumentValidator:
             if sections_lost_pct > 10:
                 errors.append(
                     f"Lost {len(missing_sections)} sections ({sections_lost_pct:.1f}% of document): "
-                    f"{', '.join(list(missing_sections)[:5])}"
+                    f"{', '.join(missing_sections[:5])}"
                     + (f" and {len(missing_sections) - 5} more" if len(missing_sections) > 5 else "")
                     + ". This suggests content was accidentally removed."
                 )
             else:
                 # Less than 10% lost - warning but not error (might be intentional)
-                warnings.append(f"Missing sections from original: {', '.join(list(missing_sections)[:3])}")
+                warnings.append(f"Missing sections from original: {', '.join(missing_sections[:3])}")
         
         # Check 3.5: Section count validation (additional safety check)
         if original_headings and new_headings:
@@ -180,10 +239,22 @@ class DocumentValidator:
         if missing_images and strict:
             warnings.append(f"Missing images from original: {len(missing_images)} images")
         
+        # Build change details for intent validation
+        change_details = {
+            "missing_sections": missing_sections,
+            "added_sections": added_sections,
+            "original_section_count": len(original_headings),
+            "new_section_count": len(new_headings),
+            "original_length": original_length,
+            "new_length": new_length,
+            "reduction_pct": reduction_pct
+        }
+        
         return ValidationResult(
             is_valid=len(errors) == 0,
             errors=errors,
-            warnings=warnings
+            warnings=warnings,
+            change_details=change_details
         )
     
     @staticmethod

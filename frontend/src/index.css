@@ -2,18 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+      monospace;
+  }
 }
 
 @keyframes bounce {
@@ -29,8 +58,10 @@ code {
 .ProseMirror {
   outline: none;
   min-height: 100%;
-  padding: 1rem;
+  padding: 2rem;
   line-height: 1.75;
+  font-size: 16px;
+  color: #1f2937;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
@@ -45,7 +76,8 @@ code {
 .ProseMirror p {
   margin-top: 1.25em;
   margin-bottom: 1.25em;
-  line-height: 1.75;
+  line-height: 1.8;
+  color: #374151;
 }
 
 .ProseMirror p:first-child {
@@ -58,27 +90,32 @@ code {
 
 /* Headings */
 .ProseMirror h1 {
-  font-size: 2.25em;
+  font-size: 2.5em;
   font-weight: 800;
-  line-height: 1.1111111;
+  line-height: 1.2;
   margin-top: 0;
-  margin-bottom: 0.8888889em;
+  margin-bottom: 1em;
+  color: #111827;
+  letter-spacing: -0.02em;
 }
 
 .ProseMirror h2 {
-  font-size: 1.5em;
+  font-size: 1.875em;
   font-weight: 700;
-  line-height: 1.3333333;
+  line-height: 1.3;
   margin-top: 2em;
   margin-bottom: 1em;
+  color: #111827;
+  letter-spacing: -0.01em;
 }
 
 .ProseMirror h3 {
-  font-size: 1.25em;
+  font-size: 1.5em;
   font-weight: 600;
-  line-height: 1.6;
-  margin-top: 1.6em;
-  margin-bottom: 0.6em;
+  line-height: 1.4;
+  margin-top: 1.75em;
+  margin-bottom: 0.75em;
+  color: #1f2937;
 }
 
 .ProseMirror h1:first-child,
@@ -123,36 +160,41 @@ code {
 .ProseMirror blockquote {
   font-weight: 500;
   font-style: italic;
-  color: #374151;
+  color: #4b5563;
   border-left-width: 0.25rem;
-  border-left-color: #e5e7eb;
+  border-left-color: #3b82f6;
+  background-color: #f8fafc;
   quotes: "\201C""\201D""\2018""\2019";
   margin-top: 1.6em;
   margin-bottom: 1.6em;
-  padding-left: 1em;
+  padding: 1em 1.5em;
+  border-radius: 0.5rem;
 }
 
 /* Code */
 .ProseMirror code {
-  background-color: rgba(97, 97, 97, 0.1);
-  border-radius: 0.25rem;
-  padding: 0.125rem 0.25rem;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem;
   font-size: 0.875em;
-  font-weight: 400;
+  font-weight: 500;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color: #dc2626;
 }
 
 .ProseMirror pre {
-  background-color: #1f2937;
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
   color: #f3f4f6;
-  border-radius: 0.5rem;
-  padding: 1em;
+  border-radius: 0.75rem;
+  padding: 1.5em;
   overflow-x: auto;
-  margin-top: 1.25em;
-  margin-bottom: 1.25em;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
   line-height: 1.75;
   font-size: 0.875em;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .ProseMirror pre code {
@@ -334,12 +376,16 @@ code {
 /* Link Styles */
 .ProseMirror a {
   color: #2563eb;
-  text-decoration: underline;
+  text-decoration: none;
+  border-bottom: 1px solid #93c5fd;
+  transition: all 0.2s ease;
   cursor: pointer;
+  font-weight: 500;
 }
 
 .ProseMirror a:hover {
   color: #1d4ed8;
+  border-bottom-color: #2563eb;
 }
 
 /* Strikethrough Styles */

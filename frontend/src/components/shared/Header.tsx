@@ -181,16 +181,16 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 shadow-soft">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo and Brand */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/workspace")}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity group"
+              className="flex items-center gap-2 hover:opacity-90 transition-all duration-200 group"
             >
-              <div className="flex items-center justify-center w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-md group-hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 rounded-xl shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div className="flex flex-col">
@@ -216,10 +216,10 @@ export const Header: React.FC = () => {
                     setMobileMenuOpen(false);
                   }}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all relative",
+                    "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative",
                     item.isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   )}
                 >
                   <Icon className="w-4 h-4" />
@@ -243,7 +243,7 @@ export const Header: React.FC = () => {
                     setTimeout(() => searchInputRef.current?.focus(), 0);
                   }
                 }}
-                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm"
+                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm hover:shadow"
                 title="Search projects and documents (⌘K)"
               >
                 <Search className="w-4 h-4 text-gray-500" />
@@ -274,8 +274,8 @@ export const Header: React.FC = () => {
 
               {/* Search Dropdown */}
               {searchOpen && (
-                <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-lg bg-white border border-gray-200 shadow-2xl z-50 overflow-hidden">
-                  <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+                <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-xl bg-white border-2 border-gray-200 shadow-large z-50 overflow-hidden animate-slide-down">
+                  <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 via-blue-50/50 to-white">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <Input
@@ -381,7 +381,7 @@ export const Header: React.FC = () => {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 group"
               >
-                <div className="flex items-center justify-center w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full shadow-sm group-hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
                   <span className="text-sm font-semibold text-white">
                     {userInitials}
                   </span>
@@ -396,8 +396,8 @@ export const Header: React.FC = () => {
 
               {/* Dropdown Menu */}
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-lg bg-white border border-gray-200 shadow-xl z-50 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white">
+                <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white border-2 border-gray-200 shadow-large z-50 overflow-hidden animate-slide-down">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-blue-50/50 to-white">
                     <p className="text-sm font-semibold text-gray-900">User Account</p>
                     <p className="text-xs text-gray-500 mt-0.5 truncate">{userEmail}</p>
                   </div>

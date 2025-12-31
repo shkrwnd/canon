@@ -17,6 +17,90 @@ class PromptService:
     """Service for prompt engineering with two-stage prompting and dynamic construction"""
     
     @staticmethod
+    def _extract_document_summary_smart(content: str, name: str, standing_instruction: str = "") -> str:
+        """
+        Smart extraction: combines multiple signals to understand document content.
+        Uses headings, standing instructions, and content structure - no LLM needed.
+        """
+        if not content:
+            return "Empty document"
+        
+        signals = []
+        
+        # Signal 1: Standing instruction (explicit purpose)
+        if standing_instruction:
+            signals.append(f"Purpose: {standing_instruction[:100]}")
+        
+        # Signal 2: Document headings (structure)
+        from .document_validator import DocumentValidator
+        headings = DocumentValidator.extract_headings(content)
+        if headings:
+            # Group by heading level to understand hierarchy
+            h1_h2 = headings[:4]  # First 4 headings
+            if h1_h2:
+                signals.append(f"Main sections: {', '.join(h1_h2)}")
+        
+        # Signal 3: First paragraph (introduction/overview)
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip() and len(p.strip()) > 50]
+        if paragraphs:
+            intro = paragraphs[0]
+            # Clean markdown
+            intro = re.sub(r'^#{1,6}\s+', '', intro, flags=re.MULTILINE)
+            intro = re.sub(r'\*\*([^*]+)\*\*', r'\1', intro)
+            intro = re.sub(r'\*([^*]+)\*', r'\1', intro)
+            if len(intro) > 150:
+                intro = intro[:150] + "..."
+            signals.append(intro)
+        
+        # Signal 4: Content type indicators
+        content_lower = content.lower()
+        type_indicators = []
+        if 'recipe' in content_lower or 'ingredient' in content_lower:
+            type_indicators.append("recipes")
+        if '```' in content or 'def ' in content or 'class ' in content:
+            type_indicators.append("code")
+        if 'http' in content_lower or 'www.' in content_lower:
+            type_indicators.append("links/references")
+        if type_indicators:
+            signals.append(f"Contains: {', '.join(type_indicators)}")
+        
+        # Signal 5: Document length (indicates scope)
+        if len(content) > 5000:
+            signals.append("Large document (comprehensive)")
+        elif len(content) < 200:
+            signals.append("Short note")
+        
+        # Combine signals
+        if signals:
+            return " | ".join(signals[:3])  # Use top 3 signals
+        else:
+            return content[:100].replace('\n', ' ') + "..."  # Fallback
+    
+    @staticmethod
+    def _build_documents_with_summaries(documents: list) -> str:
+        """
+        Build document list with names and intelligent summaries for semantic matching.
+        Uses headings, standing instructions, and content structure.
+        """
+        if not documents:
+            return "No documents available"
+        
+        docs = []
+        for d in documents[:15]:  # Limit to 15 documents for prompt size
+            name = d.get('name', 'Unnamed')
+            content = d.get('content', '')
+            standing_instruction = d.get('standing_instruction', '')
+            
+            summary = PromptService._extract_document_summary_smart(
+                content,
+                name,
+                standing_instruction
+            )
+            docs.append(f"  - \"{name}\": {summary}")
+        
+        return "Available documents:\n" + "\n".join(docs)
+    
+    @staticmethod
     def _build_compressed_documents_list(documents: list) -> str:
         """Build compressed document list for prompts"""
         if not documents:
@@ -253,45 +337,111 @@ CURRENT MESSAGE: "{user_message}"
 
 PROJECT CONTEXT:
 {project_info}
-Available documents: {doc_list}
+{doc_list}
 
-Intent types:
-- "conversation": User wants information, answers, discussion, or content displayed in chat
-  * Questions, greetings, explanations
-  * "summarize/print/show [document] here" or "in chat" → user wants response in chat, not document action
-  * "tell me about [document]" → user wants info in chat
-  * General knowledge questions without document context
-  
-- "edit": User wants to modify an existing document
-  * Action words: add, update, change, remove, edit, delete, save, put
+Action types:
+- UPDATE_DOCUMENT: User wants to modify/edit an existing document
+  * Semantic pattern: User requests to perform an action on a document
+  * Intent: User wants something changed/added/updated, not just explained
+  * Action words: add, update, change, remove, edit, delete, save, put, implement, apply, do, make
   * "save it/that/this" → save content from conversation to document
+  * Follow-up requests that ask to implement/apply/add something = UPDATE_DOCUMENT
+  * **Key principle**: Must contain explicit action verbs requesting document modification. Questions seeking information are NOT actions
   
-- "create": User wants to create a new document
+- SHOW_DOCUMENT: User wants to see/read/display document content (in chat)
+  * "show me [document]", "what's in [document]", "read [document]"
+  * "summarize [document]" → show summary in chat
+  * "tell me about [document]" → show info in chat
+  
+- CREATE_DOCUMENT: User wants to create a new document
   * Action words: create, make, new document, write
   * "create a [noun]" → create new document
   
-- "clarify": Request is too vague to determine intent
+- ANSWER_ONLY: User wants information/answer (may need web search)
+  * Semantic pattern: User asks "what/how/which/why/could/would/should" to learn or understand
+  * Intent: User wants to know something, not do something
+  * Questions seeking information, explanations, or understanding
+  * General knowledge questions without document context
+  * Follow-up questions that seek information (even if referencing previous suggestions) = ANSWER_ONLY
+  * **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
+  
+- LIST_DOCUMENTS: User wants to see list of documents
+  * "list documents", "show all documents", "what documents do I have"
+  
+- NEEDS_CLARIFICATION: Request is too vague to determine intent
+  * "do something", "fix it" (unclear what)
+  * Use when confidence would be < 0.5 due to high ambiguity
+  * Use when query could reasonably be interpreted as multiple different actions
 
 IMPORTANT GUIDELINES:
 1. Use conversation history to understand context:
-   - If user previously mentioned creating/editing something (see [ORIGINAL REQUEST] above), follow-up messages like "yes", "this is not enough", "make it better" should maintain that original intent
+   - If user previously mentioned creating/editing something (see [ORIGINAL REQUEST] above), follow-up messages should maintain that original intent IF they are action requests
+   - **CRITICAL: Distinguish QUESTIONS (seeking information) from ACTION REQUESTS (requesting to do something):**
+     * QUESTIONS → ANSWER_ONLY:
+       - Semantic pattern: User is asking "what", "how", "which", "why", "could", "would", "should"
+       - Intent: User wants to know/understand/learn something
+       - No explicit action verbs requesting document modification
+       - Examples of question patterns: asking about possibilities, explanations, details, options, strategies
+       - Follow-up questions that seek information (even referencing previous suggestions) = ANSWER_ONLY
+     * ACTION REQUESTS → UPDATE_DOCUMENT/CREATE_DOCUMENT:
+       - Semantic pattern: User is requesting to perform an action
+       - Intent: User wants something to be done/changed/created
+       - Contains explicit action verbs: add, update, change, remove, edit, create, implement, apply, do, make
+       - Examples of action patterns: requesting changes, asking to implement, asking to add/update
+   - **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
    - Understand what "it", "that", "here" refer to from context
    - Track the original request through the conversation
 
 2. Hard rules (for edge cases):
-   - "where did you [action]" = conversation (question about past action, not new action)
-   - "what did you [action]" = conversation (question about past action)
-   - Message contains "here" or "in chat" = conversation (user wants response in chat)
-   - Pure questions without action words = conversation
+   - Questions about past actions ("where did you", "what did you") = ANSWER_ONLY
+   - Message contains "here" or "in chat" = SHOW_DOCUMENT or ANSWER_ONLY (user wants response in chat)
+   - Pure questions without action words = ANSWER_ONLY
 
-3. Trust your natural understanding of conversation flow and context
+3. Document matching for targets:
+   - Match user's document references to document names from the list above
+   - Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
+   - "primary": Main document(s) needed for the action
+   - "secondary": Additional documents for context or reference
+   - If user says "the guide" and there's a document with "guide" in name/summary → match it
 
 Response JSON:
 {{
-    "intent_type": "conversation"|"edit"|"create"|"clarify",
-    "confidence": 0.0-1.0,
-    "needs_documents": boolean  // true if need full doc content for decision
-}}"""
+    "action": "UPDATE_DOCUMENT | SHOW_DOCUMENT | CREATE_DOCUMENT | ANSWER_ONLY | LIST_DOCUMENTS | NEEDS_CLARIFICATION",
+    "targets": [
+        {{
+            "document_name": "Python Guide",
+            "summary": "Brief description of why this document is relevant (what it contains that matches the user's request)",
+            "role": "primary"
+        }}
+    ],
+    "new_document": {{ "name": "optional document name" }},
+    "confidence": 0.0-1.0,  // Reflect your certainty about the classification
+      * Use HIGH confidence (0.8-1.0): Clear, unambiguous requests with explicit intent
+        - Examples: "add X to document", "create a script", "show me the guide"
+      * Use MEDIUM confidence (0.5-0.7): Somewhat ambiguous, but you can make a reasonable inference
+        - Examples: "what else can be added?" (could be question or action), "improve it" (needs context)
+        - Ambiguous queries where intent could be interpreted multiple ways
+      * Use LOW confidence (0.3-0.5): Very ambiguous query where intent is unclear
+        - Examples: "do something", "fix it" (unclear what), vague references without context
+      * If confidence < 0.5, strongly consider using NEEDS_CLARIFICATION action
+      * **Key principle**: Lower confidence for ambiguous queries, especially those that could be questions OR actions
+    "intent_statement": "Brief statement of what the user wants"
+}}
+
+Targets array:
+- Match user's question/intent to relevant documents by name and content summary
+- "document_name": Exact name from the "Available documents" list above
+- "summary": Brief description of why this document is relevant (what it contains that answers the question)
+- "primary": Main document(s) needed to answer the question or perform the action
+- "secondary": Additional documents for context or reference
+- Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
+- Empty array [] if no documents are relevant to the question/action
+- For CREATE_DOCUMENT: targets array should be empty
+- For UPDATE_DOCUMENT: targets should contain the document to be updated
+- For SHOW_DOCUMENT: targets should contain the document(s) to show
+- For ANSWER_ONLY: targets should contain documents that help answer the question
+- For LIST_DOCUMENTS: targets array should be empty
+- For NEEDS_CLARIFICATION: targets array should be empty"""
         
         return prompt
     
@@ -325,7 +475,8 @@ Response JSON:
         user_message: str,
         documents: list,
         project_context: Optional[Dict] = None,
-        intent_type: Optional[str] = None
+        intent_type: Optional[str] = None,
+        intent_metadata: Optional[Dict] = None
     ) -> str:
         """
         Stage 2: Generate detailed decision prompt with dynamic sections
@@ -343,9 +494,30 @@ Response JSON:
         if project_context:
             project_info = f"Project: {project_context.get('name', 'Unknown')} (id:{project_context.get('id')})\n"
         
+        # Add structured intent context if available
+        intent_context = ""
+        if intent_metadata:
+            action = intent_metadata.get("action")
+            targets = intent_metadata.get("targets", [])
+            intent_statement = intent_metadata.get("intent_statement", "")
+            
+            intent_context = f"""
+STAGE 1 CLASSIFICATION:
+- Action: {action}
+- Intent: {intent_statement}
+- Target Documents: {len(targets)} document(s) identified
+"""
+            if targets:
+                primary_target = next((t for t in targets if t.get("role") == "primary"), None)
+                if primary_target:
+                    intent_context += f"- Primary target: {primary_target.get('document_name')} (id: {primary_target.get('document_id')})\n"
+                    if primary_target.get('summary'):
+                        intent_context += f"  Summary: {primary_target.get('summary')}\n"
+        
         # Core rules (always included)
         core = f"""You're a document maintainer. Keep docs accurate and structured.
 {project_info}
+{intent_context}
 Current Date Context: Today is {current_date_str}, current year is {current_year}
 
 Core Rules:

@@ -94,6 +94,8 @@ class LLMService:
         
         messages_stage1.append({"role": "user", "content": intent_prompt})
         
+        logger.info(f"→ Stage 1: Intent Classification | Message: '{user_message[:60]}{'...' if len(user_message) > 60 else ''}'")
+        
         with tracer.start_as_current_span("llm.classify_intent") as span:
             span.set_attribute("llm.operation", "classify_intent")
             span.set_attribute("llm.model", model)
@@ -109,39 +111,114 @@ class LLMService:
                 )
             
             intent_data = json.loads(intent_response)
-            intent_type = intent_data.get("intent_type", "conversation")
-            needs_documents = intent_data.get("needs_documents", True)
-            confidence = intent_data.get("confidence", 0.5)
             
+            # Parse new structured format
+            action = intent_data.get("action", "ANSWER_ONLY")
+            targets = intent_data.get("targets", [])
+            new_document = intent_data.get("new_document", {})
+            confidence = intent_data.get("confidence", 0.5)
+            intent_statement = intent_data.get("intent_statement", "")
+            
+            # Map action to legacy intent_type for backward compatibility with Stage 2
+            action_to_intent_type = {
+                "UPDATE_DOCUMENT": "edit",
+                "SHOW_DOCUMENT": "conversation",
+                "CREATE_DOCUMENT": "create",
+                "ANSWER_ONLY": "conversation",
+                "LIST_DOCUMENTS": "conversation",
+                "NEEDS_CLARIFICATION": "clarify"
+            }
+            intent_type = action_to_intent_type.get(action, "conversation")
+            
+            # Map document names to IDs
+            mapped_targets = []
+            for target in targets:
+                doc_name = target.get("document_name")
+                if not doc_name:
+                    continue
+                
+                # Find document by name (case-insensitive, partial match)
+                matched_doc = None
+                for doc in documents:
+                    doc_name_lower = doc.get('name', '').lower()
+                    target_name_lower = doc_name.lower()
+                    if doc_name_lower == target_name_lower:
+                        matched_doc = doc
+                        break
+                    # Also try partial match
+                    if target_name_lower in doc_name_lower or doc_name_lower in target_name_lower:
+                        matched_doc = doc
+                        break
+                
+                if matched_doc:
+                    mapped_targets.append({
+                        "document_id": matched_doc.get("id"),
+                        "document_name": matched_doc.get("name"),
+                        "summary": target.get("summary", ""),
+                        "role": target.get("role", "primary")
+                    })
+                else:
+                    logger.warning(f"Could not find document: {doc_name}")
+            
+            # Extract primary document_id if available
+            primary_target = next((t for t in mapped_targets if t.get("role") == "primary"), None)
+            document_id = primary_target.get("document_id") if primary_target else None
+            
+            # Determine if documents are needed
+            needs_documents = action in ["UPDATE_DOCUMENT", "SHOW_DOCUMENT", "CREATE_DOCUMENT"] or len(mapped_targets) > 0
+            
+            # Store structured data for Stage 2
+            intent_metadata = {
+                "action": action,
+                "targets": mapped_targets,
+                "targets_original": targets,  # Keep original for reference
+                "new_document": new_document,
+                "intent_statement": intent_statement
+            }
+            
+            span.set_attribute("llm.action", action)
             span.set_attribute("llm.intent_type", intent_type)
             span.set_attribute("llm.intent_confidence", confidence)
             span.set_attribute("llm.needs_documents", needs_documents)
+            span.set_attribute("llm.targets_count", len(mapped_targets))
+        
+        # Log Stage 1 completion
+        logger.info(f"✓ Stage 1 Complete | Action: {action} | Confidence: {confidence:.2f} | Targets: {len(mapped_targets)} doc(s)")
+        if mapped_targets:
+            target_names = [t.get('document_name', 'Unknown') for t in mapped_targets[:3]]
+            logger.info(f"  └─ Target documents: {', '.join(target_names)}")
+        if intent_statement:
+            logger.info(f"  └─ Intent: {intent_statement[:80]}{'...' if len(intent_statement) > 80 else ''}")
         
         # Early exit only for very simple greetings that definitely don't need web search
         # All other conversations (including questions) must go to Stage 2 to evaluate web search needs
-        if intent_type == "conversation" and not needs_documents:
+        if action == "ANSWER_ONLY" and not needs_documents:
             user_lower = user_message.lower().strip()
             # Only early exit for simple greetings that definitely don't need web search
             simple_greetings = ["hi", "hello", "hey", "thanks", "thank you", "ok", "okay"]
             if user_lower in simple_greetings:
-                logger.debug(f"Early exit for simple greeting: {user_lower}")
+                logger.info(f"→ Early Exit | Simple greeting detected, skipping Stage 2")
                 return {
                     "should_edit": False,
                     "should_create": False,
                     "needs_clarification": False,
                     "pending_confirmation": False,
                     "intent_type": intent_type,
+                    "action": action,
+                    "targets": mapped_targets,
                     "conversational_response": None,  # Will be generated separately
                     "reasoning": "Simple greeting - no action needed"
                 }
             # Otherwise, continue to Stage 2 to evaluate web search needs for questions
-            logger.debug(f"Conversation intent - proceeding to Stage 2 to evaluate web search needs")
+            logger.info(f"→ Stage 2: Detailed Decision | Action: {action} | Evaluating web search needs")
+        else:
+            logger.info(f"→ Stage 2: Detailed Decision | Action: {action} | Intent type: {intent_type}")
         
         # ============================================
         # STAGE 2: Detailed Decision (Focused)
         # ============================================
         decision_prompt = self.prompt_service.get_agent_decision_prompt(
-            user_message, documents, project_context, intent_type
+            user_message, documents, project_context, intent_type, intent_metadata
         )
         
         messages_stage2 = [
@@ -190,9 +267,29 @@ class LLMService:
             
             decision = json.loads(response_text)
             decision["intent_type"] = intent_type  # Preserve intent type
+            decision["action"] = action  # Preserve action
+            decision["targets"] = mapped_targets  # Preserve mapped targets with IDs
+            decision["intent_statement"] = intent_statement  # Preserve intent statement
+            
+            # Set document_id from primary target if not already set
+            if not decision.get("document_id") and document_id:
+                decision["document_id"] = document_id
+            
+            # Set document_name from new_document if creating
+            if action == "CREATE_DOCUMENT" and new_document.get("name"):
+                decision["document_name"] = new_document.get("name")
+            
             span.set_attribute("llm.decision.should_edit", decision.get('should_edit', False))
             span.set_attribute("llm.decision.document_id", decision.get('document_id'))
-            logger.debug(f"Agent decision: should_edit={decision.get('should_edit')}, document_id={decision.get('document_id')}")
+            span.set_attribute("llm.decision.action", action)
+            
+            # Log Stage 2 completion
+            logger.info(f"✓ Stage 2 Complete | should_edit={decision.get('should_edit')}, should_create={decision.get('should_create')}, needs_web_search={decision.get('needs_web_search')}")
+            if decision.get('document_id'):
+                logger.info(f"  └─ Document ID: {decision.get('document_id')}")
+            if decision.get('needs_web_search'):
+                logger.info(f"  └─ Web search query: '{decision.get('search_query', 'N/A')}'")
+            
             return decision
     
     async def rewrite_document_content(

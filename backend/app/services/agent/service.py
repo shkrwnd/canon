@@ -17,6 +17,7 @@ from ..llm_service import LLMService
 from ..chat_service import ChatService
 from ..document_service import DocumentService
 from ..web_search import WebSearchService
+from ..intent_validator import IntentValidator
 from .name_extractor import DocumentNameExtractor
 from .document_updater import DocumentUpdater
 from .document_creator import DocumentCreator
@@ -47,6 +48,8 @@ class AgentService:
         self.web_search_service = WebSearchService(llm_service)
         self.document_service = document_service
         self.response_formatter = AgentResponseFormatter(llm_service, self.document_repo)
+        # Intent validator is decoupled - optional dependency
+        self.intent_validator = IntentValidator(llm_service)
     
     async def _get_or_create_chat(
         self,
@@ -223,17 +226,17 @@ class AgentService:
         # Log web search trigger check
         needs_web_search = decision.get("needs_web_search", False)
         search_query = decision.get("search_query")
-        logger.info(f"Web search check: needs_web_search={needs_web_search}, search_query={search_query}")
+        logger.info(f"  └─ Web search check: needs_web_search={needs_web_search}, search_query={search_query if search_query else 'None'}")
         if not needs_web_search:
-            logger.info("Web search not triggered: needs_web_search is False or missing")
+            logger.info("    └─ Web search not triggered: needs_web_search is False or missing")
         elif not search_query:
-            logger.info("Web search not triggered: search_query is missing or empty")
+            logger.info("    └─ Web search not triggered: search_query is missing or empty")
         else:
-            logger.info(f"Web search will be performed with query: {search_query}")
+            logger.info(f"    └─ Web search will be performed with query: {search_query}")
         
         # Perform web search if needed (using WebSearchService for retry logic)
         if decision.get("needs_web_search") and decision.get("search_query"):
-            logger.info(f"Performing web search: {decision['search_query']}")
+            logger.info(f"    └─ Performing web search: {decision['search_query']}")
             with tracer.start_as_current_span("agent.web_search") as web_span:
                 web_span.set_attribute("web_search.query", decision["search_query"])
                 
@@ -252,11 +255,11 @@ class AgentService:
                 web_span.set_attribute("web_search.attempts", len(web_search_result_obj.attempts))
                 web_span.set_attribute("web_search.was_retried", web_search_result_obj.was_retried())
         else:
-            logger.info("Web search skipped: needs_web_search=False or search_query missing")
+            logger.info("    └─ Web search skipped: needs_web_search=False or search_query missing")
         
         # Log web search status after check
         web_search_results = web_search_result_obj.get_best_results() if web_search_result_obj else None
-        logger.info(f"Web search status: performed={web_search_result_obj is not None}, "
+        logger.info(f"  └─ Web search status: performed={web_search_result_obj is not None}, "
                     f"results_length={len(web_search_results) if web_search_results else 0}, "
                     f"attempts={len(web_search_result_obj.attempts) if web_search_result_obj else 0}")
         
@@ -349,40 +352,95 @@ class AgentService:
                 )
                 
                 # Log decision details for debugging
-                logger.info(f"Agent decision received: should_edit={decision.get('should_edit')}, "
-                            f"should_create={decision.get('should_create')}, "
-                            f"document_id={decision.get('document_id')}, "
-                            f"needs_web_search={decision.get('needs_web_search')}, "
-                            f"search_query={decision.get('search_query')}, "
-                            f"intent_statement={decision.get('intent_statement')}, "
-                            f"content_summary={'present' if decision.get('content_summary') else 'missing'}, "
-                            f"change_summary={'present' if decision.get('change_summary') else 'missing'}")
-                logger.debug(f"Full decision JSON: {decision}")
+                action = decision.get("action", "ANSWER_ONLY")
+                targets = decision.get("targets", [])
+                intent_statement = decision.get('intent_statement', 'N/A')
+                logger.info(f"→ Processing Action: {action} | Intent: '{intent_statement[:60]}{'...' if len(intent_statement) > 60 else ''}'")
                 
+                span.set_attribute("agent.decision.action", action)
                 span.set_attribute("agent.decision.should_edit", decision.get("should_edit", False))
                 span.set_attribute("agent.decision.document_id", decision.get("document_id"))
                 span.set_attribute("agent.decision.needs_web_search", decision.get("needs_web_search", False))
+                span.set_attribute("agent.decision.targets_count", len(targets))
+                
+                # Handle new action types
+                if action == "SHOW_DOCUMENT":
+                    logger.info(f"  └─ SHOW_DOCUMENT: Retrieving {len(targets)} target document(s) for display")
+                    # Get full content of target documents for display
+                    target_docs_content = []
+                    for target in targets:
+                        doc_id = target.get("document_id")
+                        if doc_id:
+                            doc = self.document_repo.get_by_user_and_id(user_id, doc_id)
+                            if doc:
+                                target_docs_content.append({
+                                    "id": doc.id,
+                                    "name": doc.name,
+                                    "content": doc.content,
+                                    "summary": target.get("summary", "")
+                                })
+                    decision["target_documents"] = target_docs_content
+                    decision["needs_documents"] = True
+                    if target_docs_content:
+                        doc_names = [d.get("name", "Unknown") for d in target_docs_content[:3]]
+                        logger.info(f"    └─ Retrieved: {', '.join(doc_names)}")
+                
+                elif action == "LIST_DOCUMENTS":
+                    logger.info(f"  └─ LIST_DOCUMENTS: Building document list for project {project_id}")
+                    # Get list of all documents in project
+                    if project_id:
+                        project_docs = self.document_repo.get_by_project_id(project_id)
+                        doc_list = [{"id": d.id, "name": d.name, "content_length": len(d.content)} for d in project_docs]
+                        decision["documents_list"] = doc_list
+                        logger.info(f"    └─ Found {len(doc_list)} document(s) in project")
+                
+                elif action == "NEEDS_CLARIFICATION":
+                    logger.info(f"  └─ NEEDS_CLARIFICATION: Requesting more details from user")
+                    decision["needs_clarification"] = True
+                    decision["clarification_question"] = decision.get("clarification_question", 
+                        "Could you please provide more details about what you'd like me to do?")
+                
+                elif action == "ANSWER_ONLY":
+                    if targets:
+                        target_names = [t.get('document_name', 'Unknown') for t in targets[:3]]
+                        logger.info(f"  └─ ANSWER_ONLY: Will analyze {len(targets)} document(s): {', '.join(target_names)}")
+                    else:
+                        logger.info(f"  └─ ANSWER_ONLY: General question (no specific documents)")
                 
                 # Perform web search if needed
+                if decision.get("needs_web_search"):
+                    logger.info(f"→ Web Search: Query='{decision.get('search_query')}' | Performing search...")
+                else:
+                    logger.info(f"→ Web Search: Skipped (not needed for this action)")
+                
                 web_search_result_obj = await self._perform_web_search_if_needed(
                     decision, user_message, project, span
                 )
                 web_search_performed = web_search_result_obj is not None
                 web_search_results = web_search_result_obj.get_best_results() if web_search_result_obj else None
                 
-                # Rewrite document if decision says so
+                if web_search_performed:
+                    logger.info(f"✓ Web Search Complete | Results: {len(web_search_results) if web_search_results else 0} chars")
+                elif decision.get("needs_web_search"):
+                    logger.info(f"✓ Web Search Complete | No results found")
+                
+                # Rewrite document if decision says so (UPDATE_DOCUMENT or legacy should_edit)
                 updated_document = None
-                if decision.get("should_edit") and decision.get("document_id"):
+                if (action == "UPDATE_DOCUMENT" or decision.get("should_edit")) and decision.get("document_id"):
                     target_document_id = decision["document_id"]
+                    edit_scope = decision.get("edit_scope", "selective")
+                    logger.info(f"→ Document Update: doc_id={target_document_id} | scope={edit_scope}")
                     with tracer.start_as_current_span("agent.get_target_document") as db_span:
                         db_span.set_attribute("db.operation", "get_target_document")
                     
                     # Use DocumentUpdater to handle update logic
+                    # Pass intent_validator for intent-based validation (decoupled)
                     document_updater = DocumentUpdater(
                         self.document_repo,
                         self.llm_service,
                         self.db,
-                        web_search_results=web_search_results
+                        web_search_results=web_search_results,
+                        intent_validator=self.intent_validator
                     )
                     updated_document = await document_updater.update_document(
                         decision=decision,
@@ -392,9 +450,11 @@ class AgentService:
                         span=span
                     )
                 
-                # Handle document creation if requested
+                # Handle document creation if requested (CREATE_DOCUMENT or legacy should_create)
                 created_document = None
-                if decision.get("should_create") and project_id:
+                if (action == "CREATE_DOCUMENT" or decision.get("should_create")) and project_id:
+                    doc_name = decision.get("document_name", "TBD")
+                    logger.info(f"→ Document Create: project_id={project_id} | name='{doc_name}'")
                     # Use DocumentCreator to handle creation logic
                     document_creator = DocumentCreator(
                         self.document_service,

@@ -31,6 +31,7 @@ class AgentResponseFormatter:
         Returns: Formatted response string
         """
         decision = result["decision"]
+        action = decision.get("action", "ANSWER_ONLY")
         should_edit = decision.get("should_edit", False)
         should_create = decision.get("should_create", False)
         needs_clarification = decision.get("needs_clarification", False)
@@ -38,28 +39,45 @@ class AgentResponseFormatter:
         conversational_response = decision.get("conversational_response")
         
         # Log response formatting details
-        logger.info(f"Response formatting: should_edit={should_edit}, should_create={should_create}, "
-                    f"updated_document={'present' if result.get('updated_document') else 'missing'}, "
-                    f"created_document={'present' if result.get('created_document') else 'missing'}, "
-                    f"web_search_performed={result.get('web_search_performed')}, "
-                    f"web_search_result={'present' if result.get('web_search_result') else 'missing'}, "
-                    f"content_summary={'present' if decision.get('content_summary') else 'missing'}, "
-                    f"change_summary={'present' if decision.get('change_summary') else 'missing'}, "
-                    f"intent_statement={'present' if decision.get('intent_statement') else 'missing'}")
-        if result.get('web_search_result'):
-            logger.info(f"Web search result details: attempts={len(result.get('web_search_result').attempts)}, "
-                        f"was_retried={result.get('web_search_result').was_retried()}")
+        logger.info(f"→ Response Formatting: action={action}")
         
-        # Format based on decision type
-        if needs_clarification:
+        # Determine which formatter will be used
+        if action == "SHOW_DOCUMENT":
+            logger.info(f"  └─ Using: SHOW_DOCUMENT formatter")
+        elif action == "LIST_DOCUMENTS":
+            logger.info(f"  └─ Using: LIST_DOCUMENTS formatter")
+        elif action == "ANSWER_ONLY":
+            logger.info(f"  └─ Using: Conversational formatter")
+        elif action == "UPDATE_DOCUMENT":
+            logger.info(f"  └─ Using: Edit response formatter")
+        elif action == "CREATE_DOCUMENT":
+            logger.info(f"  └─ Using: Create response formatter")
+        elif action == "NEEDS_CLARIFICATION":
+            logger.info(f"  └─ Using: Clarification formatter")
+        
+        # Log additional context
+        if result.get('updated_document'):
+            logger.info(f"    └─ Document updated: doc_id={result.get('updated_document', {}).get('id', 'N/A')}")
+        if result.get('created_document'):
+            logger.info(f"    └─ Document created: doc_id={result.get('created_document', {}).get('id', 'N/A')}")
+        if result.get('web_search_performed'):
+            logger.info(f"    └─ Web search performed: {len(result.get('web_search_results', '')) if result.get('web_search_results') else 0} chars")
+        
+        # Format based on action type (new format) or decision type (legacy)
+        if action == "NEEDS_CLARIFICATION" or needs_clarification:
             return self._format_clarification_response(decision)
         elif pending_confirmation:
             return self._format_confirmation_response(decision)
-        elif should_create:
+        elif action == "CREATE_DOCUMENT" or should_create:
             return self._format_create_response(result, decision)
-        elif should_edit:
+        elif action == "UPDATE_DOCUMENT" or should_edit:
             return self._format_edit_response(result, decision)
+        elif action == "SHOW_DOCUMENT":
+            return self._format_show_document_response(result, decision)
+        elif action == "LIST_DOCUMENTS":
+            return self._format_list_documents_response(result, decision)
         else:
+            # ANSWER_ONLY or legacy conversation
             return await self._format_conversational_response(
                 result, request, chat, chat_history_for_llm, conversational_response
             )
@@ -330,4 +348,45 @@ class AgentResponseFormatter:
         
         logger.info(f"[AGENT] Conversational response received, length: {len(agent_response_content)}, preview: {agent_response_content[:200]}")
         return agent_response_content
+    
+    def _format_show_document_response(self, result: Dict[str, Any], decision: Dict[str, Any]) -> str:
+        """Format response for showing document content"""
+        target_documents = decision.get("target_documents", [])
+        parts = []
+        
+        if not target_documents:
+            return "I couldn't find the document you're asking about."
+        
+        for doc in target_documents:
+            doc_name = doc.get("name", "Unknown")
+            doc_content = doc.get("content", "")
+            
+            parts.append(f"**{doc_name}**")
+            if doc_content:
+                # Show full content or summary based on length
+                if len(doc_content) > 2000:
+                    parts.append(f"\n{doc_content[:1500]}...\n\n[Document continues - {len(doc_content)} characters total]")
+                else:
+                    parts.append(f"\n{doc_content}")
+            else:
+                parts.append("\n(Empty document)")
+            parts.append("")  # Add spacing between documents
+        
+        return "\n".join(parts)
+    
+    def _format_list_documents_response(self, result: Dict[str, Any], decision: Dict[str, Any]) -> str:
+        """Format response for listing documents"""
+        documents_list = decision.get("documents_list", [])
+        parts = []
+        
+        if not documents_list:
+            parts.append("You don't have any documents in this project yet.")
+        else:
+            parts.append(f"You have {len(documents_list)} document(s) in this project:\n")
+            for i, doc in enumerate(documents_list, 1):
+                doc_name = doc.get("name", "Unnamed")
+                content_length = doc.get("content_length", 0)
+                parts.append(f"{i}. **{doc_name}** ({content_length:,} characters)")
+        
+        return "\n".join(parts)
 

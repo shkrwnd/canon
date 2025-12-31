@@ -47,9 +47,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({ mode, onSubmit, onToggleMode
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
           Email
         </label>
         <Input
@@ -59,11 +59,11 @@ export const AuthForm: React.FC<AuthFormProps> = ({ mode, onSubmit, onToggleMode
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
         />
-        {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+        {errors.email && <p className="mt-1.5 text-sm text-red-600 font-medium">{errors.email}</p>}
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
           Password
         </label>
         <Input
@@ -73,12 +73,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({ mode, onSubmit, onToggleMode
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
         />
-        {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
+        {errors.password && <p className="mt-1.5 text-sm text-red-600 font-medium">{errors.password}</p>}
       </div>
 
       {mode === "register" && (
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-2">
             Confirm Password
           </label>
           <Input
@@ -88,29 +88,33 @@ export const AuthForm: React.FC<AuthFormProps> = ({ mode, onSubmit, onToggleMode
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••••"
           />
-          {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
+          {errors.confirmPassword && <p className="mt-1.5 text-sm text-red-600 font-medium">{errors.confirmPassword}</p>}
         </div>
       )}
 
-      {errors.submit && <p className="text-sm text-red-600">{errors.submit}</p>}
+      {errors.submit && (
+        <div className="p-3 bg-red-50 border-2 border-red-200 rounded-lg">
+          <p className="text-sm text-red-700 font-medium">{errors.submit}</p>
+        </div>
+      )}
 
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Loading..." : mode === "login" ? "Login" : "Register"}
+      <Button type="submit" className="w-full mt-6" disabled={isSubmitting} size="lg">
+        {isSubmitting ? "Loading..." : mode === "login" ? "Sign In" : "Create Account"}
       </Button>
 
-      <div className="text-center text-sm text-gray-600">
+      <div className="text-center text-sm text-gray-600 pt-2">
         {mode === "login" ? (
           <>
             Don't have an account?{" "}
-            <button type="button" onClick={onToggleMode} className="text-blue-600 hover:underline">
+            <button type="button" onClick={onToggleMode} className="text-blue-600 hover:text-blue-700 font-semibold hover:underline transition-colors">
               Register
             </button>
           </>
         ) : (
           <>
             Already have an account?{" "}
-            <button type="button" onClick={onToggleMode} className="text-blue-600 hover:underline">
-              Login
+            <button type="button" onClick={onToggleMode} className="text-blue-600 hover:text-blue-700 font-semibold hover:underline transition-colors">
+              Sign In
             </button>
           </>
         )}

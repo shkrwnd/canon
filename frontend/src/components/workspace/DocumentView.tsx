@@ -99,8 +99,8 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
         <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white overflow-auto">
           <div className="max-w-2xl mx-auto px-8 py-8 text-center">
             <div className="flex justify-center mb-6">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                <FileText className="w-12 h-12 text-blue-600" />
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 flex items-center justify-center shadow-lg">
+                <FileText className="w-12 h-12 text-blue-700" />
               </div>
             </div>
             
@@ -147,9 +147,9 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
       <div className="h-full bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="max-w-4xl mx-auto px-8 py-6 w-full">
           <div className="text-center mb-6">
-            <div className="flex justify-center mb-3">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center shadow-lg">
-                <Sparkles className="w-8 h-8 text-blue-600" />
+            <div className="flex justify-center mb-4">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 via-blue-200 to-blue-300 flex items-center justify-center shadow-lg animate-fade-in">
+                <Sparkles className="w-10 h-10 text-blue-700" />
               </div>
             </div>
             
@@ -257,9 +257,12 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-xl font-semibold">{document.name}</h2>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{document.name}</h2>
+          <p className="text-xs text-gray-500 mt-1">Living Document</p>
+        </div>
         {!isEditing ? (
           <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
             Edit
@@ -267,7 +270,7 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
         ) : (
           <div className="flex gap-2">
             <Button onClick={handleSave} size="sm" disabled={updateDocument.isPending}>
-              Save
+              {updateDocument.isPending ? "Saving..." : "Save"}
             </Button>
             <Button onClick={handleCancel} variant="outline" size="sm">
               Cancel
@@ -275,42 +278,43 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
           </div>
         )}
       </div>
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto bg-gradient-to-b from-white to-gray-50/30">
+        <div className="max-w-4xl mx-auto px-8 py-8">
         {isEditing ? (
           <MarkdownEditor value={editContent} onChange={setEditContent} height="100%" />
         ) : (
-          <div className="prose max-w-none">
+          <div className="prose prose-lg max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed prose-a:text-blue-600 prose-a:no-underline prose-a:border-b prose-a:border-blue-300 prose-a:hover:border-blue-600 prose-strong:text-gray-900 prose-strong:font-semibold prose-code:text-red-600 prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-medium prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:text-gray-700">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 a: ({ node, ...props }) => (
-                  <a {...props} target="_blank" rel="noopener noreferrer" />
+                  <a {...props} target="_blank" rel="noopener noreferrer" className="transition-colors" />
                 ),
                 table: ({ children }) => (
-                  <div className="overflow-x-auto my-4 -mx-4 px-4">
-                    <table className="min-w-full border-collapse border border-gray-300">
+                  <div className="overflow-x-auto my-6 -mx-4 px-4">
+                    <table className="min-w-full border-collapse border-2 border-gray-200 rounded-lg shadow-sm">
                       {children}
                     </table>
                   </div>
                 ),
                 thead: ({ children }) => (
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                     {children}
                   </thead>
                 ),
-                tbody: ({ children }) => <tbody>{children}</tbody>,
+                tbody: ({ children }) => <tbody className="bg-white">{children}</tbody>,
                 tr: ({ children }) => (
-                  <tr className="border-b border-gray-300">
+                  <tr className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                     {children}
                   </tr>
                 ),
                 th: ({ children }) => (
-                  <th className="px-4 py-2 text-left font-semibold border-r border-gray-300 last:border-r-0">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900 border-r border-gray-200 last:border-r-0">
                     {children}
                   </th>
                 ),
                 td: ({ children }) => (
-                  <td className="px-4 py-2 border-r border-gray-300 last:border-r-0">
+                  <td className="px-4 py-3 border-r border-gray-200 last:border-r-0 text-gray-700">
                     {children}
                   </td>
                 ),
@@ -320,6 +324,7 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ document, projectId,
             </ReactMarkdown>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

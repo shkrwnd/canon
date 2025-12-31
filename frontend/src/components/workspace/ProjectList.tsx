@@ -139,8 +139,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="p-3 border-b border-gray-200 bg-gray-50/50">
+    <div className="flex flex-col h-full bg-gradient-to-b from-white to-gray-50/30">
+      <div className="p-4 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white shadow-sm">
         <Button
           onClick={() => setShowCreateProjectForm(!showCreateProjectForm)}
           className="w-full flex justify-center items-center gap-2"
@@ -174,8 +174,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
       <div className="flex-1 overflow-auto">
         {projects && projects.length === 0 ? (
           <div className="p-8 text-center">
-            <Folder className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-600 mb-1">No projects yet</p>
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-sm">
+              <Folder className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">No projects yet</p>
             <p className="text-xs text-gray-500">Create your first project to get started</p>
           </div>
         ) : (
@@ -191,10 +193,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                       onSelectProject(project);
                       onToggleProject(project.id);
                     }}
-                    className={`relative px-3 py-2.5 cursor-pointer transition-all duration-150 ${
+                    className={`relative px-4 py-3 cursor-pointer transition-all duration-200 rounded-r-lg ${
                       isSelected 
-                        ? "bg-blue-50 border-l-4 border-blue-600 text-blue-900" 
-                        : "hover:bg-gray-50 text-gray-700"
+                        ? "bg-gradient-to-r from-blue-50 to-blue-100/50 border-l-4 border-blue-600 text-blue-900 shadow-sm" 
+                        : "hover:bg-gray-50 text-gray-700 hover:shadow-sm"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -209,10 +211,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                         <Folder className={`w-4 h-4 flex-shrink-0 ${isSelected ? "text-blue-600" : "text-gray-500"}`} />
                         <div className="font-medium text-sm truncate flex-1">{project.name}</div>
                         {documentCount > 0 && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                          <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 font-medium ${
                             isSelected 
-                              ? "bg-blue-100 text-blue-700" 
-                              : "bg-gray-100 text-gray-600"
+                              ? "bg-blue-200 text-blue-800 shadow-sm" 
+                              : "bg-gray-200 text-gray-700"
                           }`}>
                             {documentCount}
                           </span>
@@ -220,10 +222,10 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                       </div>
                       <button
                         onClick={(e) => handleDeleteProjectClick(e, project.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 flex-shrink-0"
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 flex-shrink-0 hover:scale-110"
                         title="Delete project"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -320,8 +322,8 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({
   }
 
   return (
-    <div className="bg-gray-50/50 border-l-2 border-gray-100">
-      <div className="px-3 py-2 border-b border-gray-200/50">
+    <div className="bg-gradient-to-r from-gray-50/80 to-white border-l-2 border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-200/60">
         <Button
           onClick={() => onShowCreateFormChange(!showCreateForm)}
           className="w-full flex justify-center items-center gap-1.5 h-7 text-xs"
@@ -362,9 +364,11 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({
         )}
       </div>
       {documents && documents.length === 0 ? (
-        <div className="px-3 py-4 text-center">
-          <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-xs text-gray-500">No documents yet</p>
+        <div className="px-4 py-6 text-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shadow-sm">
+            <FileText className="w-6 h-6 text-gray-400" />
+          </div>
+          <p className="text-xs font-medium text-gray-600">No documents yet</p>
         </div>
       ) : (
         <div className="py-1">
@@ -375,10 +379,10 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({
               <div
                 key={document.id}
                 onClick={() => onSelectDocument(document)}
-                className={`group relative px-3 py-2.5 pl-10 cursor-pointer transition-all duration-150 ${
+                className={`group relative px-4 py-3 pl-12 cursor-pointer transition-all duration-200 rounded-r-lg ${
                   isSelected 
-                    ? "bg-blue-50 border-l-4 border-blue-500 text-blue-900" 
-                    : "hover:bg-gray-100/70 text-gray-700"
+                    ? "bg-gradient-to-r from-blue-50 to-blue-100/50 border-l-4 border-blue-500 text-blue-900 shadow-sm" 
+                    : "hover:bg-gray-100/80 text-gray-700 hover:shadow-sm"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -404,10 +408,10 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({
                   </div>
                   <button
                     onClick={(e) => onDeleteDocument(e, projectId, document.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 flex-shrink-0"
+                    className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 flex-shrink-0 hover:scale-110"
                     title="Delete document"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

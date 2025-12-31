@@ -17,11 +17,22 @@ tracer = get_tracer(__name__)
 class DocumentUpdater:
     """Handles document update operations with validation and retry logic"""
     
-    def __init__(self, document_repo, llm_service, db, web_search_results=None):
+    def __init__(self, document_repo, llm_service, db, web_search_results=None, intent_validator=None):
+        """
+        Initialize document updater.
+        
+        Args:
+            document_repo: Document repository
+            llm_service: LLM service for rewriting
+            db: Database session
+            web_search_results: Optional web search results
+            intent_validator: Optional IntentValidator for intent-based validation
+        """
         self.document_repo = document_repo
         self.llm_service = llm_service
         self.db = db
         self.web_search_results = web_search_results
+        self.intent_validator = intent_validator  # Optional, decoupled dependency
     
     async def update_document(
         self,
@@ -75,14 +86,91 @@ class DocumentUpdater:
         decision: Dict[str, Any],
         span: trace.Span
     ) -> Optional[Dict[str, Any]]:
-        """Validate content and update document, with retry logic if validation fails"""
-        # Validate the rewritten content
+        """Validate content and update document, with intent-aware retry logic"""
+        # Step 1: Structural validation
         validation_result = DocumentValidator.validate_rewrite(
             new_content=new_content,
             original_content=target_document.content
         )
         
-        # If validation fails, retry once
+        # Step 2: If validation fails, check if changes match user intent (if intent validator available)
+        if not validation_result.is_valid and self.intent_validator:
+            # Check if there are intent-checkable errors
+            if validation_result.has_intent_checkable_errors():
+                logger.info("Validation failed with intent-checkable errors. Checking user intent...")
+                span.set_attribute("agent.intent_validation_attempted", True)
+                
+                try:
+                    intent_result = await self.intent_validator.validate_changes_against_intent(
+                        user_message=user_message,
+                        validation_result=validation_result,
+                        original_content=target_document.content,
+                        new_content=new_content
+                    )
+                    
+                    span.set_attribute("agent.intent_all_intentional", intent_result.all_changes_intentional)
+                    span.set_attribute("agent.intent_intentional_count", len(intent_result.intentional_changes))
+                    
+                    # If all changes are intentional, allow update
+                    if intent_result.all_changes_intentional:
+                        logger.info(
+                            f"All changes confirmed as intentional: {intent_result.reasoning}. "
+                            f"Allowing update without retry."
+                        )
+                        # Clear intentional errors, keep only unintentional ones
+                        validation_result.errors = intent_result.unintentional_errors
+                        # Also keep technical errors (markdown, placeholders) that can't be intentional
+                        technical_errors = [
+                            err for err in validation_result.errors 
+                            if "markdown" in err.lower() or "placeholder" in err.lower()
+                        ]
+                        validation_result.errors = technical_errors + intent_result.unintentional_errors
+                        
+                        # If no remaining errors, validation passes
+                        if not validation_result.errors:
+                            validation_result.is_valid = True
+                            logger.info("Intent validation passed. Proceeding with update.")
+                            # Store intent validation info in decision
+                            decision['intent_validation'] = {
+                                'all_intentional': True,
+                                'intentional_changes': intent_result.intentional_changes,
+                                'reasoning': intent_result.reasoning
+                            }
+                            # Proceed with update
+                            return self._perform_update(
+                                target_document_id,
+                                new_content,
+                                validation_result,
+                                user_id,
+                                decision,
+                                span
+                            )
+                        else:
+                            logger.info(
+                                f"Some errors remain after intent validation: {validation_result.errors}. "
+                                f"Proceeding with retry."
+                            )
+                    else:
+                        logger.info(
+                            f"Changes don't fully match user intent. "
+                            f"Intentional: {len(intent_result.intentional_changes)}, "
+                            f"Unintentional: {len(intent_result.unintentional_errors)}. "
+                            f"Proceeding with retry."
+                        )
+                        # Store intent validation info
+                        decision['intent_validation'] = {
+                            'all_intentional': False,
+                            'intentional_changes': intent_result.intentional_changes,
+                            'unintentional_errors': intent_result.unintentional_errors,
+                            'reasoning': intent_result.reasoning
+                        }
+                
+                except Exception as e:
+                    logger.error(f"Error during intent validation: {e}. Proceeding with standard retry.")
+                    span.record_exception(e)
+                    # On error, fall through to standard retry logic
+        
+        # Step 3: If validation still fails, retry once
         if not validation_result.is_valid:
             logger.warning(
                 f"Document rewrite validation failed: {validation_result.errors}. Retrying once..."

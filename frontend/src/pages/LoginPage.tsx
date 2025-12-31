@@ -21,9 +21,17 @@ export const LoginPage: React.FC = () => {
 
   return (
     <AuthLayout>
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Canon</h1>
-        <p className="text-sm text-gray-600 mt-2">Living Documents Editor</p>
+      <div className="text-center mb-8">
+        <div className="flex justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-lg">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Canon</h1>
+        <p className="text-base text-gray-600">Living Documents Editor</p>
+        <p className="text-sm text-gray-500 mt-2">AI-powered document management</p>
       </div>
       <AuthForm mode={mode} onSubmit={handleSubmit} onToggleMode={() => setMode(mode === "login" ? "register" : "login")} />
     </AuthLayout>
