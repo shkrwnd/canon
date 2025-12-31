@@ -833,18 +833,28 @@ Field Rules:
     ) -> str:
         """Compressed rewrite prompt"""
         scope_instructions = {
-            "selective": f"""SELECTIVE EDIT - Preserve everything else:
-1. Parse structure (headings, sections, tables, links)
-2. Identify what to change (based on: "{user_message}")
-3. Preserve ALL other content exactly
-4. Modify ONLY identified parts
+            "selective": f"""SELECTIVE EDIT - Build upon existing content:
+CRITICAL FIRST STEP: Read and understand the Current Content above before making any changes.
+
+1. **Read the Current Content first**: Understand the structure, format, style, and existing information
+2. **Understand the context**: What sections exist? What's the current format? What information is already there?
+3. **Identify what needs to change**: Based on "{user_message}", determine what specific parts need updating
+4. **Build upon existing content**: 
+   - Keep the same structure, format, and style
+   - Update only the relevant parts while preserving everything else
+   - If user provides new context (e.g., "my skin is oily"), tailor the existing content to incorporate this context
+   - Match the existing tone, formatting, and organization
+5. **Preserve ALL other content exactly**: Everything not mentioned in the request stays the same
 
 Examples:
-- "replace heading" → change ONLY heading text
-- "add to section X" → modify ONLY section X
-- "change title" → change ONLY title""",
+- "replace heading" → change ONLY heading text, keep everything else
+- "add to section X" → modify ONLY section X, preserve rest
+- "my skin is oily" → update product recommendations in existing routine to suit oily skin, keep same structure
+- "change title" → change ONLY title, preserve all content""",
             
             "full": """FULL REWRITE - Preserve ALL sections and structure:
+CRITICAL FIRST STEP: Read and understand the Current Content above before making any changes.
+
 - You may modify content extensively BUT must preserve:
   * ALL headings and sections (even if you rewrite their content)
   * Document structure and organization
@@ -852,12 +862,17 @@ Examples:
 - DO NOT remove sections unless explicitly asked
 - If improving/updating: enhance content but keep all sections
 - If restructuring: maintain all original sections, just reorganize
-- CRITICAL: Every heading in original must appear in output""",
+- CRITICAL: Every heading in original must appear in output
+- Build upon the existing content, don't replace it entirely unless explicitly asked""",
             
             None: f"""Preserve ALL content unless explicitly asked to remove:
-1. Parse structure
-2. Identify what to change (based on: "{user_message}")
-3. Preserve everything else"""
+CRITICAL FIRST STEP: Read and understand the Current Content above before making any changes.
+
+1. **Read the Current Content first**: Understand what's already there
+2. **Understand the context**: Structure, format, existing information
+3. **Identify what to change**: Based on "{user_message}", determine what needs updating
+4. **Build upon existing content**: Update relevant parts while preserving structure and style
+5. **Preserve everything else**: All content not mentioned in the request stays the same"""
         }
         
         scope_text = scope_instructions.get(edit_scope, scope_instructions[None])
@@ -937,22 +952,38 @@ You MUST fix these issues:
 - Preserve ALL original headings and sections
 - Only modify what was requested, keep everything else intact"""
         
-        prompt = f"""Rewrite document. Request: "{user_message}"
+        prompt = f"""Update document based on user request. Request: "{user_message}"
+
+CRITICAL: Read the "Current Content" section below FIRST before making any changes.
+Understand the existing structure, format, and content, then build upon it.
 
 Standing Instruction: {standing_instruction}
 
-Current Content:
+=== CURRENT CONTENT (READ THIS FIRST) ===
 {current_content}
+=== END OF CURRENT CONTENT ===
 
 {scope_text}
 {web_search_section}{web_search_instructions}{validation_section}
+
+IMPORTANT - Track Your Changes:
+- As you make changes, be aware of what you're modifying:
+  * Which sections did you update?
+  * What specific information did you add, remove, or change?
+  * Did you tailor existing content to new context (e.g., updated product recommendations for specific skin type)?
+- This awareness will help ensure changes are accurate and complete
+- Keep track mentally of: what was there → what changed → what's now there
+
 Output Requirements:
 - Pure markdown (NO HTML tags)
 - Preserve ALL formatting: tables, links, images, code blocks, lists, headings
 - Preserve ALL sections not mentioned in request
+- Build upon existing content - don't replace it unless explicitly asked
+- Match existing style, tone, and format
 - **MANDATORY: If web search results were provided above, the document MUST end with a "## Sources" section**
 - **The Sources section must list ALL URLs from the web search results in format: - [Title](URL)**
-- Return ONLY markdown content (no explanations)"""
+- Return ONLY markdown content (no explanations)
+- Be aware of what you changed so you can accurately describe modifications if needed"""
         
         return prompt
     
