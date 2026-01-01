@@ -308,7 +308,8 @@ Response JSON:
                         -1
                     )
                     messages_ago = len(chat_history) - original_index if original_index >= 0 else "unknown"
-                    conversation_context += f"user: {content} [ORIGINAL {original_intent_type.upper()} REQUEST - {messages_ago} messages ago]\n"
+                    # Make marker less prominent - it's for context only, not for inferring current intent
+                    conversation_context += f"user: {content} (previous request - {messages_ago} messages ago, for context only)\n"
                     conversation_context += "...\n"  # Indicate gap in messages
             
             # Then include recent messages
@@ -369,17 +370,23 @@ PROJECT CONTEXT:
 === KEY RULES ===
 1. **Statements without action verbs = ANSWER_ONLY** (providing context, not requesting action)
 2. **Do NOT infer document operations from conversation history** - only act on explicit requests
-3. **Content alignment**: Only match documents if request topic aligns with document topic (unless user explicitly names document)
-4. **If misaligned and no explicit name → CREATE_DOCUMENT** instead of UPDATE_DOCUMENT
-5. **intent_statement must describe CURRENT message only**, not previous messages
-6. **Use history to resolve ambiguity** (e.g., "it" refers to what?) but extract intent from current message
-7. **If statement is ambiguous** (could be context or action) → lower confidence (< 0.6) or NEEDS_CLARIFICATION
+3. **CRITICAL: Context statements with ORIGINAL REQUEST in history:**
+   - Even if conversation history shows [ORIGINAL CREATE REQUEST] or [ORIGINAL EDIT REQUEST], if current message is a statement without action verbs → ANSWER_ONLY
+   - Semantic pattern: User states they have an idea/thought/information without action verbs → ANSWER_ONLY (not CREATE_DOCUMENT)
+   - User must EXPLICITLY request action with action verbs (e.g., "create a document for this", "add this to a document") → CREATE_DOCUMENT/UPDATE_DOCUMENT
+   - Rule: ORIGINAL REQUEST in history does NOT make context statements into action requests
+4. **Content alignment**: Only match documents if request topic aligns with document topic (unless user explicitly names document)
+5. **If misaligned and no explicit name → CREATE_DOCUMENT** instead of UPDATE_DOCUMENT
+6. **intent_statement must describe CURRENT message only**, not previous messages
+7. **Use history to resolve ambiguity** (e.g., "it" refers to what?) but extract intent from current message
+8. **If statement is ambiguous** (could be context or action) → lower confidence (< 0.6) or NEEDS_CLARIFICATION
 
 === EDGE CASES ===
 - Questions about past actions ("where did you", "what did you") = ANSWER_ONLY
 - Message contains "here" or "in chat" = SHOW_DOCUMENT or ANSWER_ONLY
 - Pure questions without action words = ANSWER_ONLY
-- If user previously mentioned creating/editing, follow-up maintains intent ONLY IF it's an action request
+- If user previously mentioned creating/editing, follow-up maintains intent ONLY IF it's an action request (has explicit action verbs)
+- **CRITICAL**: Context statements (user shares information/ideas/thoughts without action verbs) → ANSWER_ONLY (even with ORIGINAL REQUEST in history)
 
 === DOCUMENT MATCHING ===
 - **Content Alignment Check**: Verify request topic matches document topic before matching
@@ -521,6 +528,12 @@ User: "{user_message}"
             most_recent_dec = current_year - 1 if current_month < 12 else current_year
             sections.append(f"""
 === CONVERSATION RESPONSE ===
+**CRITICAL: This is a CONVERSATION/ANSWER_ONLY action from Stage 1**
+- should_edit: MUST be false (do NOT edit documents)
+- should_create: MUST be false (do NOT create documents)
+- This is a conversational response, not a document operation
+- Only provide answers, explanations, or information
+
 Provide helpful response:
 - General knowledge questions (not about documents): Use web search if needed, provide direct answer
   * "who is the current president" → needs_web_search: true, search_query: "current president of US {current_year}"

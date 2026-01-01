@@ -293,8 +293,18 @@ class AgentService:
             document_id = result["updated_document"].get("id")
         elif result.get("created_document"):
             document_id = result["created_document"].get("id")
-        else:
+        # For ANSWER_ONLY actions, don't use request.document_id (it's from previous action)
+        elif decision.get("action") != "ANSWER_ONLY":
             document_id = request.document_id
+        
+        # Determine success based on action type
+        action = decision.get("action", "ANSWER_ONLY")
+        if action == "ANSWER_ONLY":
+            # For ANSWER_ONLY, success means the response was generated
+            success = result.get("agent_message") is not None
+        else:
+            # For document operations, success means document was created/updated
+            success = result.get("updated_document") is not None or result.get("created_document") is not None
         
         event_bus.publish(AgentActionCompletedEvent(
             user_id=user_id,
@@ -302,7 +312,7 @@ class AgentService:
             project_id=request.project_id or chat.project_id,
             document_id=document_id,
             action_type="agent_action",
-            success=result.get("updated_document") is not None or result.get("created_document") is not None,
+            success=success,
             metadata={
                 "should_edit": decision.get("should_edit", False),
                 "should_create": decision.get("should_create", False),
@@ -411,6 +421,11 @@ class AgentService:
                         "Could you please provide more details about what you'd like me to do?")
                 
                 elif action == "ANSWER_ONLY":
+                    # CRITICAL: Stage 1 classified as ANSWER_ONLY - do NOT allow document operations
+                    # Force should_edit and should_create to False regardless of Stage 2 decision
+                    decision["should_edit"] = False
+                    decision["should_create"] = False
+                    
                     if targets:
                         target_names = [t.get('document_name', 'Unknown') for t in targets[:3]]
                         logger.info(f"  └─ ANSWER_ONLY: Will analyze {len(targets)} document(s): {', '.join(target_names)}")
