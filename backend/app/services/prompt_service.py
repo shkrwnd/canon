@@ -339,89 +339,69 @@ PROJECT CONTEXT:
 {project_info}
 {doc_list}
 
-Action types:
-- UPDATE_DOCUMENT: User wants to modify/edit an existing document
-  * Semantic pattern: User requests to perform an action on a document
-  * Intent: User wants something changed/added/updated, not just explained
-  * Action words: add, update, change, remove, edit, delete, save, put, implement, apply, do, make
-  * "save it/that/this" → save content from conversation to document
-  * Follow-up requests that ask to implement/apply/add something = UPDATE_DOCUMENT
-  * **Key principle**: Must contain explicit action verbs requesting document modification. Questions seeking information are NOT actions
+=== CORE DECISION PRINCIPLE ===
+**PRIMARY RULE**: If message has explicit action verbs (add, update, create, edit, make, save) requesting document operations → UPDATE_DOCUMENT/CREATE_DOCUMENT
+**PRIMARY RULE**: If message seeks information, provides context, or has no action verbs → ANSWER_ONLY
+**PRIMARY RULE**: If message is ambiguous → lower confidence (< 0.6) or NEEDS_CLARIFICATION
+
+=== ACTION TYPES ===
+- UPDATE_DOCUMENT: Explicit action verbs (add, update, change, edit, delete, save, put, implement, apply) + document reference
+  * Special: "save it/that/this" → save content from conversation to document
+  * Must contain explicit action verbs requesting document modification
+  * Questions seeking information are NOT actions
   
-- SHOW_DOCUMENT: User wants to see/read/display document content (in chat)
-  * "show me [document]", "what's in [document]", "read [document]"
-  * "summarize [document]" → show summary in chat
-  * "tell me about [document]" → show info in chat
-  
-- CREATE_DOCUMENT: User wants to create a new document
-  * Action words: create, make, new document, write
+- CREATE_DOCUMENT: Explicit action verbs (create, make, new document, write) + new document intent
   * "create a [noun]" → create new document
   
-- ANSWER_ONLY: User wants information/answer (may need web search)
-  * Semantic pattern: User asks "what/how/which/why/could/would/should" to learn or understand
-  * Intent: User wants to know something, not do something
-  * Questions seeking information, explanations, or understanding
-  * General knowledge questions without document context
-  * **Personal statements/emotions**: "i am feeling sad", "i'm tired", "i'm happy" → ANSWER_ONLY with empty targets []
-  * **Casual conversation**: "how are you", "good morning", "nice weather" → ANSWER_ONLY with empty targets []
-  * **Messages unrelated to documents**: Any message with no document-related intent → ANSWER_ONLY with empty targets []
-  * Follow-up questions that seek information (even if referencing previous suggestions) = ANSWER_ONLY
-  * **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
-  * **Key principle**: If message has no document-related intent → ANSWER_ONLY with empty targets []
+- ANSWER_ONLY: Questions, statements providing context, no action verbs requesting document operations
+  * Questions: "what/how/which/why/could/would/should" seeking information
+  * Context statements: User states facts, shares information without action verbs
+  * Personal/emotional/casual: "i am feeling sad", "how are you", "good morning" → empty targets []
+  * Follow-up questions seeking information = ANSWER_ONLY
+  * Messages unrelated to documents → empty targets []
   
-- LIST_DOCUMENTS: User wants to see list of documents
-  * "list documents", "show all documents", "what documents do I have"
+- SHOW_DOCUMENT: "show me [document]", "read [document]", "what's in [document]", "summarize [document]"
   
-- NEEDS_CLARIFICATION: Request is too vague to determine intent
-  * "do something", "fix it" (unclear what)
-  * Use when confidence would be < 0.5 due to high ambiguity
-  * Use when query could reasonably be interpreted as multiple different actions
+- LIST_DOCUMENTS: "list documents", "show all documents", "what documents do I have"
+  
+- NEEDS_CLARIFICATION: Too vague, confidence < 0.5, "do something", "fix it" (unclear what)
 
-IMPORTANT GUIDELINES:
-1. **CRITICAL: Filter out non-document messages:**
-   - **Personal statements/emotions**: "i am feeling sad", "i'm tired", "i'm happy", "i feel anxious" → ANSWER_ONLY with empty targets []
-   - **Casual conversation**: "how are you", "nice weather", "good morning", "thanks" → ANSWER_ONLY with empty targets []
-   - **Messages completely unrelated to documents**: Any message that has no connection to document content, actions, or questions about documents → ANSWER_ONLY with empty targets []
-   - **Rule**: Only match documents if the user's message is actually about document content, actions, or questions about documents
-   - **Rule**: If message has no document-related intent, use empty targets array []
-   - **Rule**: Do NOT try to find connections where none exist - if a message is clearly personal/casual/unrelated, do not match it to documents
+=== KEY RULES ===
+1. **Statements without action verbs = ANSWER_ONLY** (providing context, not requesting action)
+2. **Do NOT infer document operations from conversation history** - only act on explicit requests
+3. **Content alignment**: Only match documents if request topic aligns with document topic (unless user explicitly names document)
+4. **If misaligned and no explicit name → CREATE_DOCUMENT** instead of UPDATE_DOCUMENT
+5. **intent_statement must describe CURRENT message only**, not previous messages
+6. **Use history to resolve ambiguity** (e.g., "it" refers to what?) but extract intent from current message
+7. **If statement is ambiguous** (could be context or action) → lower confidence (< 0.6) or NEEDS_CLARIFICATION
 
-2. Use conversation history to understand context:
-   - **Use chat history to resolve ambiguity**: If the current message is ambiguous (e.g., "add it", "update that"), use history to understand what "it" or "that" refers to
-   - **But extract intent from current message**: The intent_statement should describe what the user wants in THIS message, even if context from history helps you understand it
-   - If user previously mentioned creating/editing something (see [ORIGINAL REQUEST] above), follow-up messages should maintain that original intent IF they are action requests
-   - **CRITICAL: Distinguish QUESTIONS (seeking information) from ACTION REQUESTS (requesting to do something):**
-     * QUESTIONS → ANSWER_ONLY:
-       - Semantic pattern: User is asking "what", "how", "which", "why", "could", "would", "should"
-       - Intent: User wants to know/understand/learn something
-       - No explicit action verbs requesting document modification
-       - Examples of question patterns: asking about possibilities, explanations, details, options, strategies
-       - Follow-up questions that seek information (even referencing previous suggestions) = ANSWER_ONLY
-     * ACTION REQUESTS → UPDATE_DOCUMENT/CREATE_DOCUMENT:
-       - Semantic pattern: User is requesting to perform an action
-       - Intent: User wants something to be done/changed/created
-       - Contains explicit action verbs: add, update, change, remove, edit, create, implement, apply, do, make
-       - Examples of action patterns: requesting changes, asking to implement, asking to add/update
-   - **Key principle**: If the message seeks INFORMATION → ANSWER_ONLY. If it requests an ACTION → UPDATE_DOCUMENT/CREATE_DOCUMENT
-   - Understand what "it", "that", "here" refer to from context
-   - Track the original request through the conversation
-   - **Key principle for intent_statement**: Describe what the user wants in the CURRENT message, using context from history to understand references, but not copying intent from previous messages
+=== EDGE CASES ===
+- Questions about past actions ("where did you", "what did you") = ANSWER_ONLY
+- Message contains "here" or "in chat" = SHOW_DOCUMENT or ANSWER_ONLY
+- Pure questions without action words = ANSWER_ONLY
+- If user previously mentioned creating/editing, follow-up maintains intent ONLY IF it's an action request
 
-3. Hard rules (for edge cases):
-   - Questions about past actions ("where did you", "what did you") = ANSWER_ONLY
-   - Message contains "here" or "in chat" = SHOW_DOCUMENT or ANSWER_ONLY (user wants response in chat)
-   - Pure questions without action words = ANSWER_ONLY
+=== DOCUMENT MATCHING ===
+- **Content Alignment Check**: Verify request topic matches document topic before matching
+  * If misaligned (e.g., "business plan" request vs "skincare routine" document) → DO NOT match, use CREATE_DOCUMENT
+  * Exception: If user explicitly names document → match regardless of alignment
+- Match by: document name reference, semantic matching (name/summary), topic alignment
+- "primary": Main document(s) needed; "secondary": Additional context
+- Empty targets [] for: personal statements, casual conversation, unrelated messages
+- **Target rules by action**:
+  * CREATE_DOCUMENT: empty targets []
+  * UPDATE_DOCUMENT: targets contain document to update
+  * SHOW_DOCUMENT: targets contain document(s) to show
+  * ANSWER_ONLY: targets contain documents that help answer (if any)
+  * LIST_DOCUMENTS: empty targets []
+  * NEEDS_CLARIFICATION: empty targets []
 
-4. Document matching for targets:
-   - **CRITICAL**: Only include documents in targets if the user's message is actually related to those documents
-   - **CRITICAL**: If message is personal/emotional/casual conversation → empty targets []
-   - **CRITICAL**: Do NOT match documents if message is unrelated (e.g., "i am feeling sad" has nothing to do with any document)
-   - Match user's document references to document names from the list above
-   - Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
-   - "primary": Main document(s) needed for the action
-   - "secondary": Additional documents for context or reference
-   - If user says "the guide" and there's a document with "guide" in name/summary → match it
-   - **Do NOT force document matches** - only match when there's a clear, legitimate connection
+=== CONFIDENCE SCORING ===
+- HIGH (0.8-1.0): Clear, unambiguous requests with explicit intent
+- MEDIUM (0.5-0.7): Somewhat ambiguous but reasonable inference possible
+- LOW (0.3-0.5): Very ambiguous, unclear intent
+- If confidence < 0.5 → strongly consider NEEDS_CLARIFICATION
+- Lower confidence for ambiguous statements that could be context or action
 
 Response JSON:
 {{
@@ -434,45 +414,13 @@ Response JSON:
         }}
     ],
     "new_document": {{ "name": "optional document name" }},
-    "confidence": 0.0-1.0,  // Reflect your certainty about the classification
-      * Use HIGH confidence (0.8-1.0): Clear, unambiguous requests with explicit intent
-        - Examples: "add X to document", "create a script", "show me the guide"
-      * Use MEDIUM confidence (0.5-0.7): Somewhat ambiguous, but you can make a reasonable inference
-        - Examples: "what else can be added?" (could be question or action), "improve it" (needs context)
-        - Ambiguous queries where intent could be interpreted multiple ways
-      * Use LOW confidence (0.3-0.5): Very ambiguous query where intent is unclear
-        - Examples: "do something", "fix it" (unclear what), vague references without context
-      * If confidence < 0.5, strongly consider using NEEDS_CLARIFICATION action
-      * **Key principle**: Lower confidence for ambiguous queries, especially those that could be questions OR actions
-    "intent_statement": "Brief statement of what the user wants IN THE CURRENT MESSAGE"
+    "confidence": 0.0-1.0,
+    "intent_statement": "What user wants in CURRENT MESSAGE only (use history for context, not for intent)"
       * **CRITICAL**: This must describe the intent of the CURRENT MESSAGE, not previous messages
       * Use chat history to understand context and resolve ambiguity (e.g., "it" refers to what?)
       * But the intent_statement should describe what the user wants NOW, in this specific message
-      * Examples:
-        - Current: "can you remember my phone number - 9910868245" → "User wants me to remember/store their phone number"
-        - Current: "add it to the document" (where "it" refers to previous suggestion) → "User wants to add the previously mentioned content to a document"
-        - Current: "i am feeling sad" → "User is expressing feelings of sadness"
       * **Do NOT** copy intent from previous messages - extract intent from the CURRENT message, even if context helps understand it
-}}
-
-Targets array:
-- **CRITICAL**: Only include documents if the user's message is actually related to those documents
-- **CRITICAL**: Use empty array [] for personal statements, emotions, casual conversation, or any message unrelated to documents
-- **CRITICAL**: Do NOT match documents if message is unrelated (e.g., "i am feeling sad" has nothing to do with any document)
-- Match user's question/intent to relevant documents by name and content summary
-- "document_name": Exact name from the "Available documents" list above
-- "summary": Brief description of why this document is relevant (what it contains that answers the question)
-- "primary": Main document(s) needed to answer the question or perform the action
-- "secondary": Additional documents for context or reference
-- Use semantic matching: if user asks "Python syntax", match to documents with "Python" in name or summary
-- Empty array [] if no documents are relevant to the question/action
-- **Do NOT force document matches** - only match when there's a clear, legitimate connection
-- For CREATE_DOCUMENT: targets array should be empty
-- For UPDATE_DOCUMENT: targets should contain the document to be updated
-- For SHOW_DOCUMENT: targets should contain the document(s) to show
-- For ANSWER_ONLY: targets should contain documents that help answer the question
-- For LIST_DOCUMENTS: targets array should be empty
-- For NEEDS_CLARIFICATION: targets array should be empty"""
+}}"""
         
         return prompt
     
@@ -610,26 +558,41 @@ Provide helpful response:
 === EDIT REQUEST ===
 Action words: add, update, change, remove, edit, rewrite, modify, delete, insert, save, put
 
+**CRITICAL: Content Alignment Validation**
+Before deciding to edit an existing document, check if the request aligns with the document's topic:
+- Compare the user's request topic with the document's name, summary, and content topic
+- If request topic doesn't align with document topic:
+  * If user explicitly named the document → proceed with edit (user's explicit choice)
+  * If user did NOT explicitly name the document → use CREATE_DOCUMENT instead
+  * Example: Request about "business plan" but document is "Skincare Routine" → CREATE_DOCUMENT (unless user said "add to Skincare Routine")
+- **Rule**: Only edit existing documents if request topic aligns with document topic OR user explicitly specified the document
+- **Rule**: If misaligned and no explicit document name → should_create: true, should_edit: false
+
 Special cases:
 - "save it/that/this" → Save content from conversation history to a document
   * Check conversation history for content to save
   * If user mentioned a document name, use that document
-  * If no document mentioned, infer from context or use most recent/relevant document
+  * If no document mentioned, check if content topic matches any existing document
+  * If no match or misaligned → CREATE a new one with inferred name
   * If no document exists, CREATE a new one with inferred name
 
 Document Resolution:
 1. Name match: User says "update X" → find doc named X (case-insensitive)
-2. Content match: "add hotels" → find travel/itinerary doc
-3. Topic match: "edit the document about [topic]" → find doc with topic in name or content
+2. **Content alignment check**: Verify request topic matches document topic
+   * If misaligned and user didn't explicitly name document → CREATE_DOCUMENT instead
+3. Content match: "add hotels" → find travel/itinerary doc (verify alignment)
+4. Topic match: "edit the document about [topic]" → find doc with topic in name or content
    * Example: "edit the document about the latest Python features" → find doc with "latest Python features" or "Python" in name/content
-4. Context: "save it", "add it there" → check conversation history for:
+5. Context: "save it", "add it there" → check conversation history for:
    - Content to save (from previous agent response)
    - Document reference (mentioned earlier)
    - Most recent document if no specific reference
-5. If multiple match → use most relevant
-6. If no match found but user explicitly said "edit the document about [topic]" or "edit the document called [name]" → 
+   - **Validate alignment**: If content topic doesn't match document topic → CREATE_DOCUMENT
+6. If multiple match → use most relevant (check alignment)
+7. If no match found but user explicitly said "edit the document about [topic]" or "edit the document called [name]" → 
    * Set should_edit: true, document_id: null (will be handled gracefully)
    * intent_statement should indicate which document was intended
+8. **If request topic doesn't align with any existing document topic** → should_create: true, should_edit: false
 
 Edit Scope:
 - "selective": Small changes (heading, section, add to X, save content, improve, update, enhance, make better) → preserve all else
@@ -640,6 +603,7 @@ Edit Scope:
   * Even for "full", preserve ALL sections and headings
 
 CRITICAL: For selective edits, preserve ALL other content unchanged. For "full" edits, preserve ALL sections even if content is rewritten.
+CRITICAL: Always validate content alignment before editing. If misaligned and user didn't explicitly name document → CREATE_DOCUMENT instead.
 """)
         
         elif intent_type == "create":

@@ -286,11 +286,21 @@ class AgentService:
         
         # Publish event for cross-cutting concerns (analytics, monitoring)
         decision = result["decision"]
+        # Prioritize newly created/updated document ID over request.document_id
+        # (request.document_id might be from a previous action)
+        document_id = None
+        if result.get("updated_document"):
+            document_id = result["updated_document"].get("id")
+        elif result.get("created_document"):
+            document_id = result["created_document"].get("id")
+        else:
+            document_id = request.document_id
+        
         event_bus.publish(AgentActionCompletedEvent(
             user_id=user_id,
             chat_id=chat.id,
             project_id=request.project_id or chat.project_id,
-            document_id=request.document_id or (result.get("updated_document", {}).get("id") if result.get("updated_document") else None) or (result.get("created_document", {}).get("id") if result.get("created_document") else None),
+            document_id=document_id,
             action_type="agent_action",
             success=result.get("updated_document") is not None or result.get("created_document") is not None,
             metadata={
