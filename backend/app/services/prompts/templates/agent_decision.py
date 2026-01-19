@@ -359,6 +359,12 @@ FIELD RULES:
   * For "create a script" → generate the script content here
   * For "save it" → extract content from conversation history (previous agent response)
 - edit_scope: "selective" for small changes including "save it", "full" for large
+- intent_statement: Required if should_edit or should_create (describe completed action in first person past tense)
+  * Format: "I have [verb]..." (e.g., "I have rewritten...", "I have updated...", "I have fixed...")
+  * DO NOT use third person: "User wants to..." ❌
+  * DO NOT use future tense: "I will..." or "I'll..." ❌
+  * CORRECT: "I have rewritten the document to fix the dummy source section" ✅
+  * CORRECT: "I have updated the document to add the latest Python features" ✅
 - content_summary: Required if should_edit or should_create (describe what was/will be added)
   * Use first-person active voice WITHOUT pronouns ("I", "we", "the agent")
   * Start with action verbs: "Added...", "Updated...", "Created...", "Expanded...", "Included..."
