@@ -1,5 +1,7 @@
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from ..config import settings
 
 
@@ -45,17 +47,40 @@ def setup_logging():
     """Configure logging for the application"""
     log_level = getattr(settings, "log_level", "INFO").upper()
     
-    # Create handler with telemetry formatter
-    handler = logging.StreamHandler(sys.stdout)
+    # Create formatter
     formatter = TelemetryFormatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
-    handler.setFormatter(formatter)
+    
+    handlers = []
+    
+    # Console handler (stdout)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    handlers.append(console_handler)
+    
+    # File handler - add if log file path is configured
+    log_file = getattr(settings, "log_file", None)
+    if log_file:
+        # Create logs directory if it doesn't exist
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Use RotatingFileHandler to prevent log files from growing too large
+        # maxBytes: 10MB, backupCount: 5 (keeps 5 backup files)
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
     
     logging.basicConfig(
         level=getattr(logging, log_level, logging.INFO),
-        handlers=[handler]
+        handlers=handlers
     )
     
     # Set specific log levels for noisy libraries
@@ -64,4 +89,6 @@ def setup_logging():
     
     logger = logging.getLogger(__name__)
     logger.info(f"Logging configured with level: {log_level}")
+    if log_file:
+        logger.info(f"Logs will be saved to: {log_file}")
 

@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     jwt_expiration_hours: int = 24
     # Logging
     log_level: str = "INFO"
+    log_file: Optional[str] = None  # e.g., "logs/canon.log" or "/var/log/canon/app.log"
     debug: bool = False
     # CORS
     cors_origins: list = ["http://localhost:3000"]

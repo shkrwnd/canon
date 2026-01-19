@@ -1,3 +1,17 @@
+"""
+DEPRECATED: This module is deprecated and no longer used.
+
+The API now uses PromptServiceV2 which implements the new modular prompt architecture
+(Policy Pack, Templates, Builder, Router patterns).
+
+This file is kept for reference and potential rollback purposes only.
+To use the new architecture, import PromptServiceV2 instead:
+
+    from app.services import PromptServiceV2
+
+Migration completed: All services now use PromptServiceV2 by default.
+"""
+
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import logging
@@ -13,8 +27,17 @@ except ImportError:
     PROMPT_EXAMPLES = ""
 
 
+# DEPRECATED: Use PromptServiceV2 instead
+# This class is kept for reference/rollback purposes only
 class PromptService:
-    """Service for prompt engineering with two-stage prompting and dynamic construction"""
+    """
+    DEPRECATED: Service for prompt engineering with two-stage prompting and dynamic construction.
+    
+    This class is deprecated and no longer used. The API now uses PromptServiceV2
+    which implements the new modular prompt architecture.
+    
+    See: app.services.prompt_service_v2.PromptServiceV2
+    """
     
     @staticmethod
     def _extract_document_summary_smart(content: str, name: str, standing_instruction: str = "") -> str:
@@ -806,7 +829,8 @@ Field Rules:
         current_content: str,
         web_search_results: Optional[str] = None,
         edit_scope: Optional[str] = None,
-        validation_errors: Optional[List[str]] = None
+        validation_errors: Optional[List[str]] = None,
+        intent_statement: Optional[str] = None
     ) -> str:
         """Compressed rewrite prompt"""
         scope_instructions = {
@@ -823,9 +847,17 @@ CRITICAL FIRST STEP: Read and understand the Current Content above before making
    - Match the existing tone, formatting, and organization
 5. **Preserve ALL other content exactly**: Everything not mentioned in the request stays the same
 
+CRITICAL FOR SECTION REMOVAL:
+- If user asks to remove specific sections (e.g., "remove Section 1, Section 2"), ONLY remove those exact sections
+- Preserve ALL other sections completely unchanged
+- Do NOT remove any sections that are not explicitly mentioned in the user's request
+- Do NOT remove sections with similar names or content - only remove exact matches
+- After removal, all remaining sections must appear in the same order and format
+
 Examples:
 - "replace heading" → change ONLY heading text, keep everything else
 - "add to section X" → modify ONLY section X, preserve rest
+- "remove Section 1, Section 2" → remove ONLY "Section 1" and "Section 2" headings and their content, preserve ALL other sections
 - "my skin is oily" → update product recommendations in existing routine to suit oily skin, keep same structure
 - "change title" → change ONLY title, preserve all content""",
             
@@ -837,9 +869,10 @@ CRITICAL FIRST STEP: Read and understand the Current Content above before making
   * Document structure and organization
   * All major sections mentioned in original
 - DO NOT remove sections unless explicitly asked
+- If user asks to remove specific sections, ONLY remove those exact sections and preserve all others
 - If improving/updating: enhance content but keep all sections
 - If restructuring: maintain all original sections, just reorganize
-- CRITICAL: Every heading in original must appear in output
+- CRITICAL: Every heading in original must appear in output (unless explicitly asked to remove)
 - Build upon the existing content, don't replace it entirely unless explicitly asked""",
             
             None: f"""Preserve ALL content unless explicitly asked to remove:
@@ -849,7 +882,12 @@ CRITICAL FIRST STEP: Read and understand the Current Content above before making
 2. **Understand the context**: Structure, format, existing information
 3. **Identify what to change**: Based on "{user_message}", determine what needs updating
 4. **Build upon existing content**: Update relevant parts while preserving structure and style
-5. **Preserve everything else**: All content not mentioned in the request stays the same"""
+5. **Preserve everything else**: All content not mentioned in the request stays the same
+
+CRITICAL FOR SECTION REMOVAL:
+- If user asks to remove specific sections, ONLY remove those exact sections mentioned
+- Preserve ALL other sections completely unchanged
+- Do NOT remove sections that are not explicitly mentioned in the request"""
         }
         
         scope_text = scope_instructions.get(edit_scope, scope_instructions[None])
@@ -860,7 +898,6 @@ CRITICAL FIRST STEP: Read and understand the Current Content above before making
         if web_search_results:
             web_search_section = f"\nWeb Search Results:\n{web_search_results}\n"
             # Extract URLs from web search results for validation
-            import re
             url_pattern = r'URL:\s*(https?://[^\s\n]+)'
             urls_found = re.findall(url_pattern, web_search_results)
             title_pattern = r'Title:\s*([^\n]+)'
@@ -919,17 +956,69 @@ If it doesn't, add it now.
         # Build validation errors section if present
         validation_section = ""
         if validation_errors:
-            validation_section = f"""
+            # Extract section names from error messages
+            section_names = []
+            for error in validation_errors:
+                # Look for patterns like "Lost X sections: Section1, Section2, ..."
+                if "Lost" in error and "sections" in error:
+                    # Extract section names from error message
+                    # Pattern: "Lost X sections (Y%): Section1, Section2, Section3 and Z more"
+                    # Try to find the section list after the colon
+                    match = re.search(r':\s*([^.]+)', error)
+                    if match:
+                        sections_text = match.group(1)
+                        # Split by comma and clean up
+                        sections = [s.strip() for s in sections_text.split(',')]
+                        # Remove "and X more" if present
+                        sections = [s for s in sections if not re.match(r'and \d+ more', s)]
+                        section_names.extend(sections)
+            
+            if section_names:
+                # Remove duplicates while preserving order
+                unique_sections = []
+                seen = set()
+                for section in section_names:
+                    if section not in seen:
+                        unique_sections.append(section)
+                        seen.add(section)
+                
+                validation_section = f"""
 
 CRITICAL - Previous attempt had validation issues:
 {chr(10).join(validation_errors)}
 
 You MUST fix these issues:
-- Restore ALL missing sections mentioned above
-- Preserve ALL original headings and sections
-- Only modify what was requested, keep everything else intact"""
+- The following sections were ACCIDENTALLY removed and MUST be restored:
+{chr(10).join(f'  * {section}' for section in unique_sections)}
+- These sections were NOT requested to be removed by the user
+- Preserve ALL original headings and sections that were NOT explicitly requested to be removed
+- Only remove the sections explicitly mentioned in the user's request
+- Keep everything else completely intact"""
+            else:
+                validation_section = f"""
+
+CRITICAL - Previous attempt had validation issues:
+{chr(10).join(validation_errors)}
+
+You MUST fix these issues:
+- Restore ALL missing sections mentioned above (they were accidentally removed)
+- Preserve ALL original headings and sections that were NOT requested to be removed
+- Only remove the sections explicitly requested by the user
+- Keep everything else completely intact"""
         
-        prompt = f"""Update document based on user request. Request: "{user_message}"
+        # Check if user_message is a short confirmation and intent_statement exists
+        confirmation_words = ["yes", "ok", "okay", "sure", "yeah", "yep", "proceed", "go ahead", "do it"]
+        effective_request = user_message
+        if intent_statement and user_message.lower().strip() in confirmation_words:
+            effective_request = intent_statement
+            prompt = f"""Update document based on user request. Request: "{effective_request}"
+
+Note: User confirmed with "{user_message}". The full intent is: {intent_statement}
+
+CRITICAL: Read the "Current Content" section below FIRST before making any changes.
+Understand the existing structure, format, and content, then build upon it."""
+        else:
+            prompt = f"""Update document based on user request. Request: "{user_message}"
 
 CRITICAL: Read the "Current Content" section below FIRST before making any changes.
 Understand the existing structure, format, and content, then build upon it.

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List
 from ..clients.llm_providers.base import LLMProvider
-from .prompt_service import PromptService
+from .prompt_service_v2 import PromptServiceV2
 from ..core.telemetry import get_tracer
 from ..config import settings
 import asyncio
@@ -24,7 +24,8 @@ class LLMService:
             max_concurrent_requests: Maximum concurrent API requests (defaults to settings)
         """
         self.provider = provider
-        self.prompt_service = PromptService()
+        # Using PromptServiceV2 with new modular architecture (Policy Pack, Templates, Builder, Router)
+        self.prompt_service = PromptServiceV2()
         
         # Semaphore for rate limiting
         max_concurrent = max_concurrent_requests or getattr(
@@ -32,9 +33,9 @@ class LLMService:
         )
         self._semaphore = asyncio.Semaphore(max_concurrent)
         
-        logger.debug(
+        logger.info(
             f"Initialized LLMService with provider: {provider.__class__.__name__}, "
-            f"max_concurrent={max_concurrent}"
+            f"max_concurrent={max_concurrent}, using PromptServiceV2"
         )
     
     async def get_agent_decision(
@@ -73,26 +74,9 @@ class LLMService:
             {
                 "role": "system",
                 "content": "Classify user intent. Respond with valid JSON only."
-            }
+            },
+            {"role": "user", "content": intent_prompt}
         ]
-        
-        # Add chat history to Stage 1 messages for context
-        if chat_history:
-            from ..config import settings
-            history_window = getattr(settings, 'intent_classification_history_window', 20)
-            
-            for msg in chat_history[-history_window:]:  # Use configurable window
-                role = msg.get("role", "user")
-                if hasattr(role, 'value'):
-                    role = role.value
-                elif not isinstance(role, str):
-                    role = str(role).lower()
-                messages_stage1.append({
-                    "role": role,
-                    "content": msg.get("content", "")
-                })
-        
-        messages_stage1.append({"role": "user", "content": intent_prompt})
         
         logger.info(f"→ Stage 1: Intent Classification | Message: '{user_message[:60]}{'...' if len(user_message) > 60 else ''}'")
         
@@ -299,7 +283,8 @@ class LLMService:
         current_content: str,
         web_search_results: Optional[str] = None,
         edit_scope: Optional[str] = None,
-        validation_errors: Optional[List[str]] = None
+        validation_errors: Optional[List[str]] = None,
+        intent_statement: Optional[str] = None
     ) -> str:
         """
         Rewrite document content based on user intent
@@ -316,7 +301,7 @@ class LLMService:
             New document content
         """
         prompt = self.prompt_service.get_document_rewrite_prompt(
-            user_message, standing_instruction, current_content, web_search_results, edit_scope, validation_errors
+            user_message, standing_instruction, current_content, web_search_results, edit_scope, validation_errors, intent_statement
         )
         
         # Build system message - emphasize source attribution if web search was performed

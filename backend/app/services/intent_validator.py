@@ -47,7 +47,9 @@ class IntentValidator:
         user_message: str,
         validation_result: Any,  # ValidationResult from document_validator
         original_content: str,
-        new_content: str
+        new_content: str,
+        intent_statement: Optional[str] = None,
+        original_errors: Optional[List[str]] = None
     ) -> IntentValidationResult:
         """
         Validate if document changes match user's explicit intent.
@@ -57,6 +59,8 @@ class IntentValidator:
             validation_result: ValidationResult from DocumentValidator.validate_rewrite()
             original_content: Original document content
             new_content: New document content after rewrite
+            intent_statement: Optional intent statement from decision (used when user_message is a confirmation)
+            original_errors: Optional list of original validation error messages (to preserve specific section names)
         
         Returns:
             IntentValidationResult indicating which changes are intentional
@@ -74,11 +78,19 @@ class IntentValidator:
         checkable_errors = validation_result.get_intent_checkable_errors()
         change_details = validation_result.change_details
         
+        # Use intent_statement if user_message is a confirmation
+        effective_user_message = user_message
+        confirmation_words = ["yes", "ok", "okay", "sure", "yeah", "yep", "proceed", "go ahead", "do it"]
+        if intent_statement and user_message.lower().strip() in confirmation_words:
+            effective_user_message = intent_statement
+            logger.info(f"Using intent_statement for intent validation (user confirmed with '{user_message}')")
+        
         # Build comprehensive prompt for LLM analysis
         prompt = self._build_intent_validation_prompt(
-            user_message=user_message,
+            user_message=effective_user_message,
             checkable_errors=checkable_errors,
-            change_details=change_details
+            change_details=change_details,
+            original_errors=original_errors or []
         )
         
         # Call LLM to analyze intent
@@ -87,7 +99,9 @@ class IntentValidator:
             span.set_attribute("intent_validator.user_message_length", len(user_message))
             
             try:
-                result = await self._call_llm_for_intent_analysis(prompt, span)
+                result = await self._call_llm_for_intent_analysis(
+                    prompt, span, original_errors or [], change_details
+                )
                 span.set_attribute("intent_validator.all_intentional", result.all_changes_intentional)
                 span.set_attribute("intent_validator.intentional_count", len(result.intentional_changes))
                 return result
@@ -106,11 +120,14 @@ class IntentValidator:
         self,
         user_message: str,
         checkable_errors: List[Dict[str, Any]],
-        change_details: Dict[str, Any]
+        change_details: Dict[str, Any],
+        original_errors: List[str] = None
     ) -> str:
         """Build prompt for LLM intent validation"""
         
         changes_summary = []
+        missing_sections_list = change_details.get("missing_sections", [])
+        
         for change in checkable_errors:
             change_type = change["type"]
             
@@ -138,24 +155,41 @@ class IntentValidator:
                     f"({reduction:.1f}% reduction)"
                 )
         
+        # Include original error messages for reference
+        original_errors_text = ""
+        if original_errors:
+            original_errors_text = "\n".join([f"  {i+1}. {err}" for i, err in enumerate(original_errors)])
+        
+        # Include list of all missing sections for granular analysis
+        missing_sections_text = ""
+        if missing_sections_list:
+            missing_sections_text = f"\n\nAll sections that were removed:\n" + "\n".join([f"  - {section}" for section in missing_sections_list])
+        
         prompt = f"""Analyze if the changes made to the document align with what the user explicitly requested.
 
 User's request: "{user_message}"
 
 Changes detected in the rewritten document:
 {chr(10).join(changes_summary)}
+{missing_sections_text}
+
+Original validation errors:
+{original_errors_text if original_errors_text else "  (No original errors provided)"}
 
 Document structure:
 - Original: {change_details.get('original_section_count', 0)} sections, {change_details.get('original_length', 0):,} characters
 - New: {change_details.get('new_section_count', 0)} sections, {change_details.get('new_length', 0):,} characters
 
-Question: Do these changes match what the user asked for?
+Question: Which specific sections from the list above were UNINTENTIONALLY removed (i.e., the user did NOT ask to remove them)?
 
 Consider:
 1. **Removals**: Did user explicitly ask to remove sections? 
    - Direct: "remove X", "delete Y section", "drop Z", "eliminate W"
-   - Indirect: "without the tokens section", "simplify by removing technical parts"
-   - Context: "make it shorter" might mean removing sections, but be cautious
+   - If user asked to remove "Section 1, Section 2, Section 3", then removing those is intentional
+   - But removing "Funding Requirements" when user only asked to remove "Section 1, 2, 3" is UNINTENTIONAL
+   - Look at which specific sections were removed vs what user asked for
+   - Compare each section name in the "All sections that were removed" list with what the user requested
+   - Be precise: if user asked to remove "Section 1, Section 2, Section 3", then ONLY those three sections are intentional
 
 2. **Rewrites/Restructuring**: Did user ask to rewrite or reorganize?
    - "rewrite the document", "restructure", "reorganize", "complete overhaul"
@@ -179,12 +213,18 @@ Respond with JSON:
         {{
             "type": "section_removal" | "structural_change" | "content_reduction",
             "description": "What change was intentional",
-            "user_intent": "How user's request matches this change"
+            "user_intent": "How user's request matches this change",
+            "intentional_sections": ["Section 1", "Section 2", "Section 3"]  // Specific sections that were intentionally removed (only for section_removal type)
         }}
     ],
-    "unintentional_errors": [
-        "error message 1",  // Errors that don't match user intent
-        "error message 2"
+    "unintentional_sections": [
+        "Funding Requirements",  // Specific sections that were UNINTENTIONALLY removed (must be restored)
+        "Sources",
+        "Operational Plan"
+    ],
+    "unintentional_error_indices": [
+        number,  // 1-based indices of original errors that don't match user intent
+        number
     ],
     "reasoning": "Brief explanation of your analysis"
 }}"""
@@ -194,7 +234,9 @@ Respond with JSON:
     async def _call_llm_for_intent_analysis(
         self,
         prompt: str,
-        span: Any
+        span: Any,
+        original_errors: List[str] = None,
+        change_details: Dict[str, Any] = None
     ) -> IntentValidationResult:
         """Call LLM to analyze intent"""
         
@@ -235,10 +277,57 @@ Respond with JSON:
         try:
             result_data = json.loads(response_text)
             
+            # Get unintentional sections if provided (section-level granularity)
+            unintentional_sections = result_data.get("unintentional_sections", [])
+            
+            # Map error indices back to original error messages, but filter to only unintentional sections
+            unintentional_errors = []
+            if original_errors and "unintentional_error_indices" in result_data:
+                indices = result_data.get("unintentional_error_indices", [])
+                for idx in indices:
+                    if isinstance(idx, int) and 1 <= idx <= len(original_errors):
+                        error_msg = original_errors[idx - 1]
+                        
+                        # If we have unintentional sections and this is a section removal error,
+                        # create a filtered error message with only unintentional sections
+                        if unintentional_sections and "Lost" in error_msg and "sections" in error_msg:
+                            # Calculate percentage based on unintentional sections vs all missing sections
+                            all_missing = change_details.get("missing_sections", []) if change_details else []
+                            if all_missing:
+                                pct = (len(unintentional_sections) / len(all_missing)) * 100
+                                filtered_error = (
+                                    f"Lost {len(unintentional_sections)} sections ({pct:.1f}% of removed sections): "
+                                    f"{', '.join(unintentional_sections[:5])}"
+                                    + (f" and {len(unintentional_sections) - 5} more" if len(unintentional_sections) > 5 else "")
+                                    + ". These sections were accidentally removed and must be restored."
+                                )
+                                unintentional_errors.append(filtered_error)
+                            else:
+                                # Fallback if we can't calculate percentage
+                                filtered_error = (
+                                    f"Lost {len(unintentional_sections)} sections: "
+                                    f"{', '.join(unintentional_sections[:5])}"
+                                    + (f" and {len(unintentional_sections) - 5} more" if len(unintentional_sections) > 5 else "")
+                                    + ". These sections were accidentally removed and must be restored."
+                                )
+                                unintentional_errors.append(filtered_error)
+                        else:
+                            # For non-section-removal errors, use the original error message
+                            unintentional_errors.append(error_msg)
+                
+                logger.debug(
+                    f"Mapped {len(indices)} error indices to {len(unintentional_errors)} filtered error messages. "
+                    f"Unintentional sections: {unintentional_sections}"
+                )
+            
+            # Fallback: if no indices provided, use the old format (for backward compatibility)
+            if not unintentional_errors and "unintentional_errors" in result_data:
+                unintentional_errors = result_data.get("unintentional_errors", [])
+            
             return IntentValidationResult(
                 all_changes_intentional=result_data.get("all_changes_intentional", False),
                 intentional_changes=result_data.get("intentional_changes", []),
-                unintentional_errors=result_data.get("unintentional_errors", []),
+                unintentional_errors=unintentional_errors,
                 reasoning=result_data.get("reasoning", "")
             )
         except json.JSONDecodeError as e:

@@ -63,5 +63,6 @@ backend/tests/reports/
 .DS_Store
 Thumbs.db
 
+logs/
 
 

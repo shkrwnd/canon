@@ -2,6 +2,7 @@ from typing import List, Dict, Optional
 from openai import AzureOpenAI
 from .base import LLMProvider
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,10 @@ class AzureOpenAIProvider(LLMProvider):
         """Make Azure OpenAI chat completion request"""
         model = model or self._default_model
         
+        # Log complete messages array for debugging
+        logger.info(f"Azure OpenAI Request - Model: {model}, Temperature: {temperature}")
+        logger.info(f"Complete messages array:\n{json.dumps(messages, indent=2, ensure_ascii=False)}")
+        
         kwargs = {
             "model": model,
             "messages": messages,
@@ -52,6 +57,7 @@ class AzureOpenAIProvider(LLMProvider):
         
         if response_format:
             kwargs["response_format"] = response_format
+            logger.info(f"Response format: {response_format}")
         
         try:
             response = self.client.chat.completions.create(**kwargs)

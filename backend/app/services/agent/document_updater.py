@@ -60,7 +60,8 @@ class DocumentUpdater:
             standing_instruction=target_document.standing_instruction,
             current_content=target_document.content,
             web_search_results=self.web_search_results,
-            edit_scope=edit_scope
+            edit_scope=edit_scope,
+            intent_statement=decision.get("intent_statement")
         )
         
         # Validate and update (handles retry logic)
@@ -105,7 +106,9 @@ class DocumentUpdater:
                         user_message=user_message,
                         validation_result=validation_result,
                         original_content=target_document.content,
-                        new_content=new_content
+                        new_content=new_content,
+                        intent_statement=decision.get("intent_statement"),
+                        original_errors=validation_result.errors
                     )
                     
                     span.set_attribute("agent.intent_all_intentional", intent_result.all_changes_intentional)
@@ -164,6 +167,12 @@ class DocumentUpdater:
                             'unintentional_errors': intent_result.unintentional_errors,
                             'reasoning': intent_result.reasoning
                         }
+                        # Update validation_result.errors to only include unintentional errors
+                        # This way the retry will focus on fixing only the unintentional removals
+                        validation_result.errors = intent_result.unintentional_errors
+                        logger.info(
+                            f"Updated validation errors to only unintentional ones: {len(validation_result.errors)} errors"
+                        )
                 
                 except Exception as e:
                     logger.error(f"Error during intent validation: {e}. Proceeding with standard retry.")
@@ -188,7 +197,8 @@ class DocumentUpdater:
                 current_content=target_document.content,
                 web_search_results=self.web_search_results,
                 edit_scope=retry_edit_scope,
-                validation_errors=validation_result.errors
+                validation_errors=validation_result.errors,
+                intent_statement=decision.get("intent_statement")
             )
             
             # Validate again
