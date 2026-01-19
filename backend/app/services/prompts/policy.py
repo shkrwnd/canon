@@ -339,13 +339,17 @@ def create_agent_policy_pack() -> AgentPolicyPack:
             "PRIMARY RULE: 'i want to create document' → CREATE_DOCUMENT (NOT ANSWER_ONLY) - this is an explicit creation request, not a question",
             "PRIMARY RULE: 'create document' anywhere in message → CREATE_DOCUMENT (regardless of phrasing like 'want to', 'would like to', 'need to')",
             "PRIMARY RULE: Messages seeking information, providing context, or with no action verbs → ANSWER_ONLY",
+            "CRITICAL RULE: Questions without action verbs (who/what/when/where/why/how) → ALWAYS ANSWER_ONLY, NEVER CREATE_DOCUMENT/UPDATE_DOCUMENT",
+            "CRITICAL RULE: Do NOT infer document operations from conversation history - only classify based on CURRENT message",
+            "CRITICAL RULE: If current message has NO action verbs → ANSWER_ONLY (even if previous messages were about document creation)",
             "PRIMARY RULE: Ambiguous messages → lower confidence (< 0.6) or NEEDS_CLARIFICATION",
             "Statements without action verbs = ANSWER_ONLY (providing context, not requesting action)",
             "Do NOT infer document operations from conversation history - only act on explicit requests",
             "Context statements with ORIGINAL REQUEST in history: if current message has no action verbs → ANSWER_ONLY",
             "User must EXPLICITLY request action with action verbs OR desire patterns → CREATE_DOCUMENT/UPDATE_DOCUMENT",
             "intent_statement must describe CURRENT message only, not previous messages",
-            "Use history to resolve ambiguity (e.g., 'it' refers to what?) but extract intent from current message"
+            "Use history to resolve ambiguity (e.g., 'it' refers to what?) but extract intent from current message",
+            "CRITICAL: Questions like 'who is', 'what is', 'when did', 'where is', 'why', 'how' → ANSWER_ONLY (information seeking, not document operations)"
         ],
         
         intent_action_types={
@@ -372,10 +376,12 @@ def create_agent_policy_pack() -> AgentPolicyPack:
             ],
             "ANSWER_ONLY": [
                 "Questions: what/how/which/why/could/would/should seeking information",
+                "Questions starting with 'who is', 'what is', 'when did', 'where is', 'why', 'how' → ALWAYS ANSWER_ONLY",
                 "Context statements: User states facts, shares information without action verbs",
                 "Personal/emotional/casual: 'i am feeling sad', 'how are you', 'good morning' → empty targets []",
                 "Follow-up questions seeking information = ANSWER_ONLY",
-                "Messages unrelated to documents → empty targets []"
+                "Messages unrelated to documents → empty targets []",
+                "CRITICAL: Questions without action verbs → ANSWER_ONLY (never CREATE_DOCUMENT/UPDATE_DOCUMENT)"
             ],
             "SHOW_DOCUMENT": [
                 "'show me [document]', 'read [document]', 'what's in [document]', 'summarize [document]'"
@@ -435,8 +441,15 @@ def create_agent_policy_pack() -> AgentPolicyPack:
         document_create_rules=[
             "BEFORE creating:",
             "  1. Infer doc name from request: 'create a script' → 'Script' or 'Video Script'",
-            "  2. Check if doc with that name exists → if yes, EDIT instead (UNLESS user explicitly said 'new document')",
-            "  3. Only create if NO matching name exists OR user explicitly said 'new document'",
+            "  2. CRITICAL: If user says 'write/create/make a document on it/that/this' → extract topic from MOST RECENT assistant response",
+            "     * Check the last assistant message in conversation history (most recent response)",
+            "     * Extract the main topic/subject from that response",
+            "     * Use that topic for document name (e.g., 'Trump Policies', 'Trump's Policies', 'US Immigration Policies')",
+            "     * Example: If last assistant response was about 'Trump's policies' → document_name: 'Trump Policies' or 'Trump's Policies'",
+            "     * Example: If last assistant response was about 'US immigration' → document_name: 'US Immigration' (if not exists) or 'US Immigration Policies'",
+            "     * Priority: Most recent assistant response > Earlier conversation > General topic",
+            "  3. Check if doc with that name exists → if yes, EDIT instead (UNLESS user explicitly said 'new document')",
+            "  4. Only create if NO matching name exists OR user explicitly said 'new document'",
             "CRITICAL: 'make a new document' or 'make a new [thing]' keywords take PRIORITY",
             "  * If user says 'make a new document about Python' → should_create: true (even if 'Python' document exists)",
             "  * Create a NEW document, don't edit existing one",

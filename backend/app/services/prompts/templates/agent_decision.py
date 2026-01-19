@@ -237,6 +237,13 @@ CRITICAL: Always validate content alignment before editing. If misaligned and us
    - "create a [noun]" → capitalize the noun (e.g., "create a plan" → "Plan")
    - "make a new [noun]" or "make a new document" → capitalize the noun or use "New Document"
    - "make a new document about [topic]" → use topic as name (e.g., "Python" or "Python Guide")
+   - **CRITICAL: "write/create/make a document on it/that/this" → extract topic from MOST RECENT assistant response**
+     * Check the last assistant message in conversation history (most recent response)
+     * Extract the main topic/subject from that response
+     * Use that topic for document name
+     * Example: Last response was "Trump's policies include..." → document_name: "Trump Policies" or "Trump's Policies"
+     * Example: Last response was about "US immigration" → document_name: "US Immigration" (if not exists) or "US Immigration Policies"
+     * Priority: Most recent assistant response > Earlier conversation > General topic
 2. Check if doc with that name exists → if yes, EDIT instead (UNLESS user explicitly said "new document" - then create with different name)
 3. Only create if NO matching name exists OR user explicitly said "new document"
 
@@ -249,6 +256,7 @@ Document Name:
 - Extract from user message intelligently
 - Patterns: "create a script" → "Script", "create a plan" → "Plan", "create a video script" → "Video Script"
 - "make a new document about [topic]" → use topic as name
+- **"write/create/make a document on it/that/this" → extract from most recent assistant response**
 - Capitalize properly ("recipes" → "Recipes", "script" → "Script")
 - REQUIRED if should_create is true
 

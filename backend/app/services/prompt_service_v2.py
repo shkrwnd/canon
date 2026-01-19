@@ -112,6 +112,9 @@ class PromptServiceV2:
         except ImportError:
             logger.debug("Could not load prompt examples")
         
+        # Only include sections relevant to agent decision (Stage 2)
+        # This reduces prompt size significantly (~50-60% reduction) and improves focus
+        # Exclude intent classification rules (already done in Stage 1)
         prompt = (PromptBuilder(
             policy=self.policy,
             template=template,
@@ -121,6 +124,18 @@ class PromptServiceV2:
         .with_project_context(project_context or {})
         .with_intent_metadata(intent_metadata or {})
         .with_examples(examples)
+        .with_sections([
+            "role",           # Agent identity
+            "objective",      # What agent does
+            "constraints",    # Key constraints
+            "documents",      # Document resolution, edit rules, create rules, content alignment
+            "web_search",     # Web search triggers, query generation, attribution
+            "conversation",   # Conversation rules (for conversational responses)
+            "safety",         # Safety rules
+            "validation",     # Validation rules
+            "output_format"   # Required for JSON response
+            # Excluded: intent (already classified in Stage 1)
+        ])
         .build())
         
         logger.debug(f"Generated agent decision prompt (intent_type: {intent_type})")
