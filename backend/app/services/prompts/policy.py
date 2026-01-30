@@ -424,6 +424,15 @@ def create_agent_policy_pack() -> AgentPolicyPack:
                 "  * Example: 'summarise it in a document' → CREATE_DOCUMENT (creating new document with summary)",
                 "  * Example: 'save this in a document' → CREATE_DOCUMENT"
             ],
+            "DELETE_DOCUMENT": [
+                "Explicit action verbs: delete, remove, clear",
+                "Pattern: 'delete [document]', 'remove [document]', 'delete it', 'remove it'",
+                "Pattern: 'yes' after confirmation prompt about deletion (check chat history)",
+                "CRITICAL: Always set pending_confirmation: true for deletion requests",
+                "CRITICAL: Only execute deletion when user explicitly confirms",
+                "Example: 'delete the document' → DELETE_DOCUMENT with pending_confirmation: true",
+                "Example: 'yes' after 'Are you sure you want to delete...' → DELETE_DOCUMENT with should_delete: true"
+            ],
             "ANSWER_ONLY": [
                 "Questions: what/how/which/why/could/would/should seeking information",
                 "Questions starting with 'who is', 'what is', 'when did', 'where is', 'why', 'how' → ALWAYS ANSWER_ONLY",

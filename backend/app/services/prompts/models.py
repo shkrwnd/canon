@@ -14,6 +14,7 @@ class IntentAction(str, Enum):
     """Intent action types for classification."""
     UPDATE_DOCUMENT = "UPDATE_DOCUMENT"
     CREATE_DOCUMENT = "CREATE_DOCUMENT"
+    DELETE_DOCUMENT = "DELETE_DOCUMENT"
     SHOW_DOCUMENT = "SHOW_DOCUMENT"
     ANSWER_ONLY = "ANSWER_ONLY"
     LIST_DOCUMENTS = "LIST_DOCUMENTS"
@@ -41,6 +42,7 @@ class AgentDecisionResult(BaseModel):
     """Structured output for agent decision."""
     should_edit: bool = False
     should_create: bool = False
+    should_delete: bool = False
     document_id: Optional[int] = None
     document_name: Optional[str] = None
     document_content: Optional[str] = None

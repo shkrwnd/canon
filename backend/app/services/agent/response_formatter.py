@@ -68,6 +68,8 @@ class AgentResponseFormatter:
             return self._format_clarification_response(decision)
         elif pending_confirmation:
             return self._format_confirmation_response(decision)
+        elif action == "DELETE_DOCUMENT" or decision.get("should_delete"):
+            return self._format_delete_response(result, decision)
         elif action == "CREATE_DOCUMENT" or should_create:
             return self._format_create_response(result, decision)
         elif action == "UPDATE_DOCUMENT" or should_edit:
@@ -236,6 +238,32 @@ class AgentResponseFormatter:
                 parts.append("The document may not exist or there was an error. Please check the document ID or try again.")
         
         return "\n".join(parts)
+    
+    def _format_delete_response(self, result: Dict[str, Any], decision: Dict[str, Any]) -> str:
+        """Format document deletion response (success or failure)"""
+        if result.get("deleted_document"):
+            return self._format_delete_success(result, decision)
+        else:
+            return self._format_delete_failure(result, decision)
+    
+    def _format_delete_success(self, result: Dict[str, Any], decision: Dict[str, Any]) -> str:
+        """Format successful document deletion response"""
+        deleted_doc = result.get("deleted_document", {})
+        doc_name = deleted_doc.get("name", "the document")
+        
+        intent_statement = decision.get("intent_statement")
+        if intent_statement:
+            # Use intent_statement if it's in first person past tense
+            if intent_statement.startswith("I have") or intent_statement.startswith("I've"):
+                return intent_statement
+            # Otherwise, format it
+            return f"I have deleted {doc_name}."
+        else:
+            return f"I have deleted {doc_name}."
+    
+    def _format_delete_failure(self, result: Dict[str, Any], decision: Dict[str, Any]) -> str:
+        """Format failed document deletion response"""
+        return "I couldn't delete the document. It may not exist or you may not have permission to delete it."
     
     def _format_web_search_details(self, web_search_result: Optional[Any]) -> List[str]:
         """Format web search details section"""

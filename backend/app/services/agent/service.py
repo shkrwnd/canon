@@ -163,6 +163,7 @@ class AgentService:
                 history_item["document_id"] = decision.get("document_id")
                 history_item["should_edit"] = decision.get("should_edit", False)
                 history_item["should_create"] = decision.get("should_create", False)
+                history_item["should_delete"] = decision.get("should_delete", False)
             
             chat_history_for_llm.append(history_item)
         
@@ -303,8 +304,12 @@ class AgentService:
             # For ANSWER_ONLY, success means the response was generated
             success = result.get("agent_message") is not None
         else:
-            # For document operations, success means document was created/updated
-            success = result.get("updated_document") is not None or result.get("created_document") is not None
+            # For document operations, success means document was created/updated/deleted
+            success = (
+                result.get("updated_document") is not None or 
+                result.get("created_document") is not None or
+                result.get("deleted_document") is not None
+            )
         
         event_bus.publish(AgentActionCompletedEvent(
             user_id=user_id,
@@ -316,11 +321,13 @@ class AgentService:
             metadata={
                 "should_edit": decision.get("should_edit", False),
                 "should_create": decision.get("should_create", False),
+                "should_delete": decision.get("should_delete", False),
                 "needs_clarification": decision.get("needs_clarification", False),
                 "pending_confirmation": decision.get("pending_confirmation", False),
                 "web_search_performed": result.get("web_search_performed", False),
                 "document_updated": result.get("updated_document") is not None,
                 "document_created": result.get("created_document") is not None,
+                "document_deleted": result.get("deleted_document") is not None,
                 "intent_statement": decision.get("intent_statement"),
                 "change_summary": decision.get("change_summary"),
                 "content_summary": decision.get("content_summary")
@@ -405,6 +412,16 @@ class AgentService:
                         doc_names = [d.get("name", "Unknown") for d in target_docs_content[:3]]
                         logger.info(f"    └─ Retrieved: {', '.join(doc_names)}")
                 
+                elif action == "DELETE_DOCUMENT":
+                    logger.info(f"  └─ DELETE_DOCUMENT: Preparing deletion for {len(targets)} target document(s)")
+                    # For deletion, we need document_id from targets
+                    if targets:
+                        primary_target = next((t for t in targets if t.get("role") == "primary"), None)
+                        if primary_target and primary_target.get("document_id"):
+                            decision["document_id"] = primary_target["document_id"]
+                            decision["should_delete"] = True
+                            logger.info(f"    └─ Target document ID: {primary_target['document_id']}")
+                
                 elif action == "LIST_DOCUMENTS":
                     logger.info(f"  └─ LIST_DOCUMENTS: Building document list for project {project_id}")
                     # Get list of all documents in project
@@ -448,6 +465,33 @@ class AgentService:
                     logger.info(f"✓ Web Search Complete | Results: {len(web_search_results) if web_search_results else 0} chars")
                 elif decision.get("needs_web_search"):
                     logger.info(f"✓ Web Search Complete | No results found")
+                
+                # Handle document deletion if requested (DELETE_DOCUMENT or should_delete)
+                deleted_document = None
+                if (action == "DELETE_DOCUMENT" or decision.get("should_delete")) and decision.get("document_id"):
+                    target_document_id = decision["document_id"]
+                    logger.info(f"→ Document Delete: doc_id={target_document_id}")
+                    
+                    # Check if document exists
+                    target_document = self.document_repo.get_by_user_and_id(user_id, target_document_id)
+                    if target_document:
+                        try:
+                            # Delete the document
+                            self.document_service.delete_document(user_id, target_document_id)
+                            deleted_document = {
+                                "id": target_document.id,
+                                "name": target_document.name,
+                                "project_id": target_document.project_id
+                            }
+                            logger.info(f"Document {target_document_id} deleted successfully")
+                            span.set_attribute("agent.document_deleted", True)
+                        except Exception as e:
+                            logger.error(f"Error deleting document {target_document_id}: {e}")
+                            span.record_exception(e)
+                            span.set_attribute("agent.document_deleted", False)
+                    else:
+                        logger.warning(f"Document {target_document_id} not found for deletion")
+                        span.set_attribute("agent.document_deleted", False)
                 
                 # Rewrite document if decision says so (UPDATE_DOCUMENT or legacy should_edit)
                 updated_document = None
@@ -506,6 +550,7 @@ class AgentService:
                     "decision": decision,
                     "updated_document": updated_document,
                     "created_document": created_document,
+                    "deleted_document": deleted_document,
                     "web_search_performed": web_search_performed,
                     "web_search_results": web_search_results if web_search_performed else None,
                     "web_search_result": web_search_result_obj  # Full WebSearchResult object with all attempts

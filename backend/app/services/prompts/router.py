@@ -31,7 +31,7 @@ class TemplateRouter:
         Route to agent decision template based on intent type.
         
         Args:
-            intent_type: "conversation", "edit", "create", or "clarify"
+            intent_type: "conversation", "edit", "create", "delete", or "clarify"
         
         Returns:
             AgentDecisionTemplate instance

@@ -108,6 +108,7 @@ class LLMService:
                 "UPDATE_DOCUMENT": "edit",
                 "SHOW_DOCUMENT": "conversation",
                 "CREATE_DOCUMENT": "create",
+                "DELETE_DOCUMENT": "delete",  # Use dedicated delete intent type
                 "ANSWER_ONLY": "conversation",
                 "LIST_DOCUMENTS": "conversation",
                 "NEEDS_CLARIFICATION": "clarify"

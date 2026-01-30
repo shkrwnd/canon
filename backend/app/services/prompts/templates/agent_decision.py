@@ -23,7 +23,7 @@ class AgentDecisionTemplate(PromptTemplate):
         Initialize template.
         
         Args:
-            intent_type: "conversation", "edit", "create", or "clarify"
+            intent_type: "conversation", "edit", "create", "delete", or "clarify"
         """
         self.intent_type = intent_type
     
@@ -74,6 +74,8 @@ class AgentDecisionTemplate(PromptTemplate):
             task += "\n\n" + self._render_edit_task_section()
         elif self.intent_type == "create":
             task += "\n\n" + self._render_create_task_section()
+        elif self.intent_type == "delete":
+            task += "\n\n" + self._render_delete_task_section()
         elif self.intent_type == "clarify":
             task += "\n\n" + self._render_clarify_task_section()
         
@@ -84,6 +86,7 @@ class AgentDecisionTemplate(PromptTemplate):
         output_format = """{
     "should_edit": boolean,
     "should_create": boolean,
+    "should_delete": boolean,
     "document_id": integer|null,
     "document_name": string|null,  // Required if should_create
     "document_content": string|null,
@@ -267,6 +270,43 @@ Document Content:
   * The purpose inferred from the request
 - Include the actual content in document_content field"""
     
+    def _render_delete_task_section(self) -> str:
+        """Render delete-specific task section."""
+        return """BEFORE deleting:
+1. Document Resolution:
+   - Name match: User says "delete X" → find doc named X (case-insensitive)
+   - Context: "delete it", "remove it" → check conversation history for most recent document reference
+   - Anaphoric reference: "the document", "it", "that document" → resolve from conversation history
+   - Resolution priority: Most recent document reference > Document mentioned in previous assistant response > Most recently created/updated document
+   - If multiple match → use most relevant
+   - If no match found → needs_clarification: true
+
+2. Confirmation Handling:
+   - CRITICAL: Always set pending_confirmation: true for deletion requests (destructive action)
+   - When user says "yes", "ok", "go ahead", "proceed", "sure" after confirmation prompt:
+     * Check chat history for the most recent message with pending_confirmation: true
+     * If found with should_delete: true → set should_delete: true, pending_confirmation: false
+     * Execute the deletion
+   - When user says "no", "cancel", "don't" → set should_delete: false, pending_confirmation: false
+
+3. Deletion Rules:
+   - should_delete: true only when:
+     * User explicitly requests deletion ("delete [document]", "remove [document]", "delete it", "remove it")
+     * User confirms deletion after confirmation prompt ("yes" after "Are you sure...")
+   - document_id: Required if should_delete: true
+   - intent_statement: Required if should_delete (describe completed action in first person past tense)
+     * Format: "I have deleted [document name]."
+     * Example: "I have deleted the document about Policies Under Secretary of Defense Pete Hegseth."
+   - confirmation_prompt: Required if pending_confirmation: true
+     * Format: "Are you sure you want to delete [document name]?"
+     * Include document name for clarity
+
+4. CRITICAL: Deletion is permanent and cannot be undone
+   - Always request confirmation before deleting
+   - Only proceed when user explicitly confirms
+   - Do NOT delete if user says "no" or "cancel"
+"""
+    
     def _render_clarify_task_section(self) -> str:
         """Render clarify-specific task section."""
         return """Only ask when:
@@ -324,6 +364,15 @@ Never search: Stable knowledge (e.g., "how to write a function"), creative conte
 DESTRUCTIVE ACTIONS:
 Set pending_confirmation: true for delete, remove, clear, large structural changes
 
+CONFIRMATION HANDLING:
+- When user says "yes", "ok", "go ahead", "proceed", "sure" after a confirmation prompt:
+  * Check chat history for the most recent message with pending_confirmation: true
+  * If found, inherit the action (should_edit, should_create, should_delete) from that pending confirmation
+  * Execute the action that was pending confirmation
+  * Example: Previous message had pending_confirmation: true, should_delete: true → set should_delete: true, pending_confirmation: false
+  * Example: Previous message had pending_confirmation: true, should_edit: true → set should_edit: true, pending_confirmation: false
+- When user says "no", "cancel", "don't" → set should_edit: false, should_create: false, should_delete: false, pending_confirmation: false
+
 FIELD RULES:
 - should_edit: true for explicit edit requests including "save it/that/this"
   * "save it" → should_edit: true, get content from conversation history
@@ -334,7 +383,12 @@ FIELD RULES:
   * MUST check if document with that name exists first
   * If exists → should_edit: true instead
   * CRITICAL: "Edit [document] and add [X]" is NOT create, it's edit
-- document_id: Required if should_edit, resolve by:
+- should_delete: true for explicit delete/remove requests
+  * "delete [document]", "remove [document]", "delete it", "remove it" → should_delete: true
+  * "yes" after confirmation prompt about deletion → should_delete: true (check chat history for pending_confirmation)
+  * CRITICAL: Set pending_confirmation: true for deletion requests (destructive action)
+  * Only set should_delete: true when user explicitly confirms (e.g., "yes", "go ahead", "delete it")
+- document_id: Required if should_edit or should_delete, resolve by:
   * Name match (user mentioned document name, e.g., "Edit the Python guide" → find "Python guide")
   * Context from conversation history
   * Most recent/relevant document if ambiguous
@@ -359,12 +413,13 @@ FIELD RULES:
   * For "create a script" → generate the script content here
   * For "save it" → extract content from conversation history (previous agent response)
 - edit_scope: "selective" for small changes including "save it", "full" for large
-- intent_statement: Required if should_edit or should_create (describe completed action in first person past tense)
+- intent_statement: Required if should_edit, should_create, or should_delete (describe completed action in first person past tense)
   * Format: "I have [verb]..." (e.g., "I have rewritten...", "I have updated...", "I have fixed...")
   * DO NOT use third person: "User wants to..." ❌
   * DO NOT use future tense: "I will..." or "I'll..." ❌
   * CORRECT: "I have rewritten the document to fix the dummy source section" ✅
   * CORRECT: "I have updated the document to add the latest Python features" ✅
+  * CORRECT: "I have deleted the document about Policies Under Secretary of Defense Pete Hegseth" ✅
 - content_summary: Required if should_edit or should_create (describe what was/will be added)
   * Use first-person active voice WITHOUT pronouns ("I", "we", "the agent")
   * Start with action verbs: "Added...", "Updated...", "Created...", "Expanded...", "Included..."
