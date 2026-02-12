@@ -68,6 +68,7 @@ jobs:
           service: '${{ env.SERVICE }}'
           region: '${{ env.REGION }}'
           source: './backend'
+          flags: '--set-build-env-vars=GOOGLE_PYTHON_VERSION=3.12.x'
 
       - name: 'Show output'
         run: |
