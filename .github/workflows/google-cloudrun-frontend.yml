@@ -1,6 +1,7 @@
 # Deploy frontend to Cloud Run when frontend code changes on main.
 #
-# Uses the same Workload Identity and GCP setup as the backend workflow.
+# Builds the frontend image in CI and deploys by image (avoids Cloud Build source-context
+# Dockerfile path issues). Uses the same Workload Identity and GCP setup as the backend.
 # One-time GCP setup: see .github/workflows/google-cloudrun-source.yml (steps 5a–e).
 # Verify: ./scripts/verify-gcp-iam.sh
 
@@ -18,6 +19,7 @@ env:
   PROJECT_ID: 'canon-487215'
   REGION: 'us-central1'
   SERVICE: 'canon-frontend'
+  ARTIFACT_REPO: 'cloud-run-source-deploy'
 
 jobs:
   deploy:
@@ -37,6 +39,17 @@ jobs:
         with:
           workload_identity_provider: 'projects/782386821852/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
 
+      - name: 'Configure Docker for Artifact Registry'
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: 'Build and push frontend image'
+        id: build
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.SERVICE }}:${{ github.sha }}"
+          docker build -f frontend/Dockerfile -t "$IMAGE" ./frontend
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
       - id: deploy
         name: 'Deploy Frontend to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
@@ -44,7 +57,7 @@ jobs:
           project_id: '${{ env.PROJECT_ID }}'
           service: '${{ env.SERVICE }}'
           region: '${{ env.REGION }}'
-          source: './frontend'
+          image: '${{ steps.build.outputs.image }}'
 
       - name: 'Show output'
         run: |
