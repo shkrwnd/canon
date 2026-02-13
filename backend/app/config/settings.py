@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: Optional[str] = None  # e.g., "logs/canon.log" or "/var/log/canon/app.log"
     debug: bool = False
-    # CORS (env CORS_ORIGINS: comma-separated; stored as str to avoid JSON parse errors)
-    cors_origins: str = "http://localhost:3000"
+    # CORS (env CORS_ORIGINS: comma-separated; default includes localhost + production frontend)
+    cors_origins: str = "http://localhost:3000,https://canon-frontend-782386821852.europe-west1.run.app"
 
     @computed_field
     @property
