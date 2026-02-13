@@ -77,8 +77,6 @@ jobs:
           region: '${{ env.REGION }}'
           source: './backend'
           flags: '--set-build-env-vars=GOOGLE_PYTHON_VERSION=3.12.x'
-          env_vars: |
-            CORS_ORIGINS=http://localhost:3000,https://canon-frontend-782386821852.europe-west1.run.app
 
       - name: 'Show output'
         run: |
