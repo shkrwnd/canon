@@ -1,0 +1,51 @@
+# Deploy frontend to Cloud Run when frontend code changes on main.
+#
+# Uses the same Workload Identity and GCP setup as the backend workflow.
+# One-time GCP setup: see .github/workflows/google-cloudrun-source.yml (steps 5a–e).
+# Verify: ./scripts/verify-gcp-iam.sh
+
+name: 'Deploy Frontend to Cloud Run'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/google-cloudrun-frontend.yml'
+
+env:
+  PROJECT_ID: 'canon-487215'
+  REGION: 'us-central1'
+  SERVICE: 'canon-frontend'
+
+jobs:
+  deploy:
+    runs-on: 'ubuntu-latest'
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332' # actions/checkout@v4
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/782386821852/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+
+      - id: deploy
+        name: 'Deploy Frontend to Cloud Run'
+        uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
+        with:
+          project_id: '${{ env.PROJECT_ID }}'
+          service: '${{ env.SERVICE }}'
+          region: '${{ env.REGION }}'
+          source: './frontend'
+
+      - name: 'Show output'
+        run: |
+          echo "Frontend URL: ${{ steps.deploy.outputs.url }}"
