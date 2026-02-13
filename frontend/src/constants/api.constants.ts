@@ -1,4 +1,13 @@
-export const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+declare global {
+  interface Window {
+    APP_CONFIG?: { API_URL?: string };
+  }
+}
+
+export const API_BASE_URL =
+  (typeof window !== "undefined" && window.APP_CONFIG?.API_URL) ||
+  process.env.REACT_APP_API_URL ||
+  "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   AUTH: {
