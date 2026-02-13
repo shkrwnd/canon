@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import computed_field
 from pydantic_settings import BaseSettings
 from typing import Optional
 import logging
@@ -27,15 +27,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: Optional[str] = None  # e.g., "logs/canon.log" or "/var/log/canon/app.log"
     debug: bool = False
-    # CORS (env CORS_ORIGINS: comma-separated list, e.g. "http://localhost:3000,https://...")
-    cors_origins: list = ["http://localhost:3000"]
+    # CORS (env CORS_ORIGINS: comma-separated; stored as str to avoid JSON parse errors)
+    cors_origins: str = "http://localhost:3000"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        if isinstance(v, str):
-            return [x.strip() for x in v.split(",") if x.strip()]
-        return v
+    @computed_field
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
     # LLM Rate Limiting
     llm_max_concurrent_requests: int = 10  # Max concurrent API calls
     # Telemetry
