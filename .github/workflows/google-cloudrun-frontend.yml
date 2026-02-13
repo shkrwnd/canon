@@ -20,6 +20,8 @@ env:
   REGION: 'us-central1'
   SERVICE: 'canon-frontend'
   ARTIFACT_REPO: 'cloud-run-source-deploy'
+  # Backend URL for runtime config (set in Cloud Run env; frontend reads via config.js)
+  BACKEND_URL: 'https://canon-backend-782386821852.europe-west1.run.app'
 
 jobs:
   deploy:
@@ -58,6 +60,8 @@ jobs:
           service: '${{ env.SERVICE }}'
           region: '${{ env.REGION }}'
           image: '${{ steps.build.outputs.image }}'
+          env_vars: |
+            API_URL=${{ env.BACKEND_URL }}
 
       - name: 'Show output'
         run: |
