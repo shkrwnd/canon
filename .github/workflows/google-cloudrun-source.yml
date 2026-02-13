@@ -26,6 +26,13 @@
 #    https://cloud.google.com/iam/docs/manage-access-other-resources.
 #
 # 3. Change the values in the "env" block to match your values.
+#
+# 4. If you get "gcr.io repo does not exist" / "createOnPush permission" on first deploy:
+#    Create the Artifact Registry repo (once) so the build can push the image:
+#      gcloud artifacts repositories create cloud-run-source-deploy \
+#        --repository-format=docker --location=REGION --project=PROJECT_ID
+#    Or grant the Cloud Build service account (PROJECT_NUMBER@cloudbuild.gserviceaccount.com)
+#    the "Artifact Registry Administrator" role so it can create the repo on first push.
 
 name: 'Deploy to Cloud Run from Source'
 
@@ -35,9 +42,9 @@ on:
       - main
 
 env:
-  PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID
-  REGION: 'us-central1' # TODO: update to your region
-  SERVICE: 'my-service' # TODO: update to your service name
+  PROJECT_ID: 'canon-487215'
+  REGION: 'us-central1'
+  SERVICE: 'my-service' # TODO: update to your Cloud Run service name
 
 jobs:
   deploy:
@@ -59,12 +66,13 @@ jobs:
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider' # TODO: replace with your workload identity provider
+          workload_identity_provider: 'projects/782386821852/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
 
       - id: deploy
         name: 'Deploy to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
         with:
+          project_id: '${{ env.PROJECT_ID }}'
           service: '${{ env.SERVICE }}'
           region: '${{ env.REGION }}'
           source: './backend'
