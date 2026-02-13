@@ -24,7 +24,7 @@ import { Input } from "../ui";
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, userEmail } = useAuth();
   const { data: projects } = useProjects();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,21 +34,14 @@ export const Header: React.FC = () => {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Get user email from localStorage or use placeholder
-  const userEmail = useMemo(() => {
-    // In a real app, this would come from user context/API
-    // For now, we'll use a placeholder
-    return "user@example.com";
-  }, []);
-
   // Get user initials for avatar
   const userInitials = useMemo(() => {
-    const email = userEmail;
+    const email = userEmail ?? "";
     const parts = email.split("@")[0].split(".");
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return email.substring(0, 2).toUpperCase();
+    return email ? email.substring(0, 2).toUpperCase() : "?";
   }, [userEmail]);
 
   const handleLogout = () => {
@@ -399,7 +392,7 @@ export const Header: React.FC = () => {
                 <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white border-2 border-gray-200 shadow-large z-50 overflow-hidden animate-slide-down">
                   <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-blue-50/50 to-white">
                     <p className="text-sm font-semibold text-gray-900">User Account</p>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{userEmail}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{userEmail ?? "—"}</p>
                   </div>
                   
                   <div className="py-1">
