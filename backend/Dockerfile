@@ -7,6 +7,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip
 
 COPY requirements.txt .
+# Install tiktoken from wheel first (required by tavily-python); avoids Rust build in next step.
+RUN pip install --no-cache-dir --only-binary :all: tiktoken==0.5.1
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
