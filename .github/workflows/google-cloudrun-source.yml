@@ -43,8 +43,8 @@ on:
 
 env:
   PROJECT_ID: 'canon-487215'
-  REGION: 'us-central1'
-  SERVICE: 'my-service' # TODO: update to your Cloud Run service name
+  REGION: 'europe-west1'
+  SERVICE: 'canon-backend'
 
 jobs:
   deploy:
