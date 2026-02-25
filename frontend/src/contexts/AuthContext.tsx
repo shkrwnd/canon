@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { isAuthenticated, removeAuthToken, getEmailFromToken } from "../utils/auth.utils";
+import { trackEvent } from "../utils/analytics";
 import { login as loginService, register as registerService } from "../services/authService";
 import { UserLogin, UserRegister } from "../types";
 
@@ -29,12 +30,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await loginService(data);
     setAuthenticated(true);
     setUserEmail(getEmailFromToken());
+    trackEvent("login", { method: "email" });
   };
 
   const register = async (data: UserRegister) => {
     await registerService(data);
     setAuthenticated(true);
     setUserEmail(getEmailFromToken());
+    trackEvent("sign_up", { method: "email" });
   };
 
   const logout = () => {
