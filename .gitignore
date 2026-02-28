@@ -26,6 +26,7 @@ wheels/
 # Environment variables
 .env
 .env.local
+.env.production
 
 # Firebase service account key (do not commit)
 backend/canon-2cec1-firebase-adminsdk-fbsvc-eca4d98dcb.json

@@ -82,7 +82,6 @@ jobs:
           flags: >-
             --set-build-env-vars=GOOGLE_PYTHON_VERSION=3.12.x
             --set-secrets=/secrets/firebase-key.json=firebase-service-account-key:latest
-            --set-env-vars=GOOGLE_APPLICATION_CREDENTIALS=/secrets/firebase-key.json
 
       - name: 'Show output'
         run: |
