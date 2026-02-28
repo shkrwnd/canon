@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     debug: bool = False
     # CORS (env CORS_ORIGINS: comma-separated; default includes localhost + production frontend)
     cors_origins: str = "http://localhost:3001,https://canon-frontend-782386821852.europe-west1.run.app"
+    # Firebase / GCP (path to service account JSON; used by firebase.py for Firestore)
+    google_application_credentials: Optional[str] = None
 
     @computed_field
     @property

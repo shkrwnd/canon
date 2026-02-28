@@ -6,12 +6,14 @@ and handles all related concerns (logging, analytics, notifications, etc.)
 """
 from .document_handler import DocumentEventHandler
 from .agent_handler import AgentEventHandler
+from .user_handler import handle_user_created
 from ..bus import event_bus
 from ..events import (
     DocumentCreatedEvent,
     DocumentUpdatedEvent,
     DocumentDeletedEvent,
     AgentActionCompletedEvent,
+    UserCreatedEvent,
 )
 import logging
 
@@ -48,6 +50,7 @@ def register_event_handlers():
     event_bus.subscribe(DocumentUpdatedEvent, handle_document_updated)
     event_bus.subscribe(DocumentDeletedEvent, handle_document_deleted)
     event_bus.subscribe(AgentActionCompletedEvent, handle_agent_action_completed)
+    event_bus.subscribe(UserCreatedEvent, handle_user_created)
     logger.info("Event handlers registered successfully")
 
 

@@ -4,6 +4,7 @@ from .events import (
     DocumentUpdatedEvent,
     DocumentDeletedEvent,
     AgentActionCompletedEvent,
+    UserCreatedEvent,
 )
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "DocumentUpdatedEvent",
     "DocumentDeletedEvent",
     "AgentActionCompletedEvent",
+    "UserCreatedEvent",
 ]
 

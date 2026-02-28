@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from .core.database import init_db
+from .core.firebase import init_firebase
 from .core.logging_config import setup_logging
 from .core.events.handlers import register_event_handlers
 from .core.telemetry import setup_telemetry
@@ -42,6 +43,9 @@ app.add_exception_handler(Exception, general_exception_handler)
 
 # Initialize database
 init_db()
+
+# Initialize Firebase when GOOGLE_APPLICATION_CREDENTIALS is set (for Firestore user sync)
+init_firebase()
 
 # Include routers
 app.include_router(auth.router, prefix="/api")

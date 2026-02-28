@@ -27,6 +27,9 @@ wheels/
 .env
 .env.local
 
+# Firebase service account key (do not commit)
+backend/canon-2cec1-firebase-adminsdk-fbsvc-eca4d98dcb.json
+
 # Database
 *.db
 *.db-wal

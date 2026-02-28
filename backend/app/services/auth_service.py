@@ -11,6 +11,8 @@ from ..models import User
 from ..schemas import UserRegister, UserLogin, Token
 from ..exceptions import ValidationError, AuthenticationError
 from ..config import settings
+from ..core.events.bus import event_bus
+from ..core.events import UserCreatedEvent
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,9 @@ class AuthService:
                 hashed_password=hashed_password
             )
             self.user_repo.commit()
-            
+
+            event_bus.publish(UserCreatedEvent(user_id=new_user.id, email=new_user.email))
+
             logger.info(f"User registered successfully: {new_user.email}")
             
             # Create access token

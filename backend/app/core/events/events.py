@@ -82,3 +82,15 @@ class AgentActionCompletedEvent(Event):
     def __repr__(self):
         return f"AgentActionCompletedEvent(user_id={self.user_id}, chat_id={self.chat_id}, project_id={self.project_id}, document_id={self.document_id}, success={self.success})"
 
+
+class UserCreatedEvent(Event):
+    """Event fired when a user is created (registration)."""
+
+    def __init__(self, user_id: int, email: str):
+        self.user_id = user_id
+        self.email = email
+        self.timestamp = datetime.utcnow()
+
+    def __repr__(self):
+        return f"UserCreatedEvent(user_id={self.user_id}, email='{self.email}')"
+
