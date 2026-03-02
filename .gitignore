@@ -38,9 +38,14 @@ backend/canon-2cec1-firebase-adminsdk-fbsvc-eca4d98dcb.json
 *.sqlite
 *.sqlite3
 
-# IDE
+# IDE / tools
 .vscode/
 .idea/
+.claude
+.claude/
+.agents/
+.mcp.json
+skills-lock.json
 *.swp
 *.swo
 *~

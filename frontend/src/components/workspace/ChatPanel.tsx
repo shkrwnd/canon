@@ -5,9 +5,10 @@ import remarkGfm from "remark-gfm";
 import { useChatMessages } from "../../hooks/useChat";
 import { agentAction } from "../../services/agentService";
 import { MessageRole, Project, Document } from "../../types";
-import { Button, Textarea, useToast } from "../ui";
+import { useToast } from "../ui";
 import { formatRelativeTime } from "../../utils/formatters";
-import { FileText } from "lucide-react";
+import { FileText, Send } from "lucide-react";
+import { cn } from "../../utils/cn";
 
 interface ChatPanelProps {
   project: Project | null;
@@ -30,17 +31,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const { data: messages, isLoading } = useChatMessages(localChatId);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [optimisticMessages, setOptimisticMessages] = useState<Array<{id: string, content: string, role: MessageRole, created_at: string}>>([]);
+  const [optimisticMessages, setOptimisticMessages] = useState<
+    Array<{
+      id: string;
+      content: string;
+      role: MessageRole;
+      created_at: string;
+    }>
+  >([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Update local chatId when prop changes (including when it becomes null)
   useEffect(() => {
     setLocalChatId(chatId);
-    // Clear optimistic messages when chat changes
     setOptimisticMessages([]);
   }, [chatId]);
 
-  // Reset chat state when project changes
   useEffect(() => {
     setLocalChatId(null);
     setOptimisticMessages([]);
@@ -62,7 +68,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInputValue("");
     setIsSending(true);
 
-    // Add optimistic user message immediately
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
     const optimisticUserMessage = {
       id: `optimistic-${Date.now()}`,
       content: userMessage,
@@ -72,7 +82,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setOptimisticMessages([optimisticUserMessage]);
 
     try {
-      // Send agent action
       const response = await agentAction({
         message: userMessage,
         project_id: project.id,
@@ -80,10 +89,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         chat_id: localChatId || undefined,
       });
 
-      // Update chatId if a new chat was created
       const newChatId = response.chat_message.chat_id;
       const finalChatId = newChatId || localChatId;
-      
+
       if (newChatId && !localChatId) {
         setLocalChatId(newChatId);
         if (onChatCreated) {
@@ -91,178 +99,267 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         }
       }
 
-      // If document was updated, notify parent
       if (response.document && onDocumentUpdated) {
         onDocumentUpdated(response.document);
       }
 
-      // Clear optimistic messages - real messages will come from the API
       setOptimisticMessages([]);
 
-      // Invalidate and refetch messages for this chat
       if (finalChatId) {
-        queryClient.invalidateQueries({ queryKey: ["chatMessages", finalChatId] });
+        queryClient.invalidateQueries({
+          queryKey: ["chatMessages", finalChatId],
+        });
       }
-      
-      // Also invalidate documents to refresh the document list
+
       if (project.id) {
-        queryClient.invalidateQueries({ queryKey: ["documents", project.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["documents", project.id],
+        });
       }
       if (document?.id) {
-        queryClient.invalidateQueries({ queryKey: ["document", project.id, document.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["document", project.id, document.id],
+        });
       }
     } catch (error: any) {
-      // Remove optimistic message on error
       setOptimisticMessages([]);
-      showToast(error.response?.data?.detail || "Failed to send message", "error");
-      // Restore input on error
+      showToast(
+        error.response?.data?.detail || "Failed to send message",
+        "error"
+      );
       setInputValue(userMessage);
     } finally {
       setIsSending(false);
     }
   };
 
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    // Auto-resize
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+  };
+
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        Select a project to start chatting
+      <div className="flex flex-col items-center justify-center h-full bg-slate-50 border-l border-slate-200">
+        <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center mb-4">
+          <svg width="18" height="18" viewBox="0 0 12 12" fill="none">
+            <path
+              d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z"
+              fill="#475569"
+            />
+          </svg>
+        </div>
+        <p className="text-sm font-semibold text-slate-700">No project selected</p>
+        <p className="text-xs text-slate-400 mt-1.5 text-center max-w-[160px] leading-relaxed">
+          Select a project from the sidebar to start chatting
+        </p>
       </div>
     );
   }
 
+  const allMessages = [
+    ...(messages || []),
+    ...optimisticMessages,
+  ];
+
+  const isEmpty =
+    (!messages || messages.length === 0) && optimisticMessages.length === 0;
+
   return (
-    <div className="flex flex-col h-full border-l border-gray-200 bg-white">
-      <div className="px-4 py-3 border-b border-gray-200 bg-white">
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Chat</h3>
-        <p className="text-xs text-gray-500">{project.name}</p>
-        {document && (
-          <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-            <FileText className="w-3 h-3" />
-            <span>{document.name}</span>
-          </p>
-        )}
-      </div>
-      <div className="flex-1 overflow-auto px-4 py-4 space-y-3 bg-gray-50/30">
-        {isLoading && !optimisticMessages.length ? (
-          <div className="text-center text-gray-500">Loading messages...</div>
-        ) : (
-          <>
-            {/* Show actual messages from API */}
-            {messages && messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === MessageRole.USER ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`${message.role === MessageRole.USER ? "max-w-[80%]" : "w-full"} rounded-lg px-3 py-2.5 ${
-                    message.role === MessageRole.USER
-                      ? "bg-blue-600 text-white"
-                      : "bg-white border border-gray-200 text-gray-900"
-                  }`}
-                >
-                  <div className={`text-sm prose prose-sm max-w-none ${
-                    message.role === MessageRole.USER 
-                      ? "prose-invert [&_*]:text-white [&_strong]:font-semibold [&_strong]:text-white [&_em]:text-white [&_code]:bg-blue-700 [&_code]:text-white [&_code]:px-1 [&_code]:rounded [&_pre]:bg-blue-700 [&_pre]:text-white [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-100 [&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4"
-                      : "[&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-600 [&_a]:underline"
-                  }`}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                  <div
-                    className={`text-xs mt-1.5 opacity-70 ${
-                      message.role === MessageRole.USER ? "text-blue-50" : "text-gray-400"
-                    }`}
-                  >
-                    {formatRelativeTime(message.created_at)}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {/* Show optimistic messages (user's message before API response) */}
-            {optimisticMessages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === MessageRole.USER ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`${message.role === MessageRole.USER ? "max-w-[80%]" : "w-full"} rounded-lg px-3 py-2.5 ${
-                    message.role === MessageRole.USER
-                      ? "bg-blue-600 text-white"
-                      : "bg-white border border-gray-200 text-gray-900"
-                  }`}
-                >
-                  <div className={`text-sm prose prose-sm max-w-none ${
-                    message.role === MessageRole.USER 
-                      ? "prose-invert [&_*]:text-white [&_strong]:font-semibold [&_strong]:text-white [&_em]:text-white [&_code]:bg-blue-700 [&_code]:text-white [&_code]:px-1 [&_code]:rounded [&_pre]:bg-blue-700 [&_pre]:text-white [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-100 [&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4"
-                      : "[&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-gray-100 [&_pre]:p-2 [&_pre]:rounded [&_a]:text-blue-600 [&_a]:underline"
-                  }`}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                  <div
-                    className={`text-xs mt-1.5 opacity-70 ${
-                      message.role === MessageRole.USER ? "text-blue-50" : "text-gray-400"
-                    }`}
-                  >
-                    just now
-                  </div>
-                </div>
-              </div>
-            ))}
-            {/* Show loading indicator when waiting for bot response */}
-            {isSending && optimisticMessages.length > 0 && (
-              <div className="flex justify-start">
-                <div className="rounded-lg px-3 py-2 bg-white border border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1.4s' }}></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s', animationDuration: '1.4s' }}></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s', animationDuration: '1.4s' }}></div>
-                    </div>
-                  </div>
-                </div>
+    <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200">
+      {/* Chat header */}
+      <div className="px-4 py-3 bg-white border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-slate-800 truncate tracking-tight">
+              {project.name}
+            </p>
+            {document && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <FileText className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                <span className="text-xs text-slate-400 truncate">
+                  {document.name}
+                </span>
               </div>
             )}
-            {(!messages || messages.length === 0) && optimisticMessages.length === 0 && (
-              <div className="text-center text-gray-400 text-sm py-8">
-                No messages yet. Start a conversation.
+          </div>
+          <div className="w-6 h-6 rounded-lg bg-blue-700 flex items-center justify-center flex-shrink-0 ml-2">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z"
+                fill="white"
+                fillOpacity="0.9"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-auto px-4 py-5 space-y-5">
+        {isLoading && !optimisticMessages.length ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex gap-1.5">
+              {[0, 0.15, 0.3].map((delay, i) => (
+                <div
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce"
+                  style={{ animationDelay: `${delay}s`, animationDuration: "1.2s" }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center mb-4">
+              <svg width="18" height="18" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z"
+                  fill="#475569"
+                />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-slate-700 mb-1.5">
+              Start a conversation
+            </p>
+            <p className="text-xs text-slate-400 max-w-[180px] leading-relaxed">
+              Ask AI to help create or update your documents
+            </p>
+          </div>
+        ) : (
+          <>
+            {allMessages.map((message) => {
+              const isUser = message.role === MessageRole.USER;
+              return (
+                <div
+                  key={message.id}
+                  className={cn("flex items-end gap-2.5", isUser ? "justify-end" : "justify-start")}
+                >
+                  {!isUser && (
+                    <div className="w-6 h-6 rounded-lg bg-blue-700 flex items-center justify-center flex-shrink-0 mb-5">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                        <path
+                          d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z"
+                          fill="white"
+                          fillOpacity="0.9"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                  <div className={cn(isUser ? "max-w-[85%]" : "flex-1 min-w-0")}>
+                    <div
+                      className={cn(
+                        "rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                        isUser
+                          ? "bg-blue-600 text-white rounded-br-md"
+                          : "bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm"
+                      )}
+                      style={!isUser ? { borderColor: '#E7E5E4' } : {}}
+                    >
+                      <div
+                        className={cn(
+                          "prose prose-sm max-w-none",
+                          isUser
+                            ? "prose-invert [&_*]:text-white [&_strong]:font-semibold [&_code]:bg-blue-500 [&_code]:px-1.5 [&_code]:rounded [&_pre]:bg-blue-800 [&_pre]:p-3 [&_pre]:rounded-lg [&_a]:text-blue-200 [&_a]:underline"
+                            : "[&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:rounded [&_code]:text-slate-700 [&_pre]:bg-slate-100 [&_pre]:p-3 [&_pre]:rounded-lg [&_a]:text-blue-700 [&_a]:underline [&_p]:text-slate-700 [&_li]:text-slate-700"
+                        )}
+                      >
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                    <p
+                      className={cn(
+                        "text-[11px] mt-1.5 text-slate-400",
+                        isUser ? "text-right" : "text-left"
+                      )}
+                    >
+                      {String(message.id).startsWith("optimistic")
+                        ? "just now"
+                        : formatRelativeTime(message.created_at)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Typing indicator */}
+            {isSending && optimisticMessages.length > 0 && (
+              <div className="flex items-end gap-2.5 justify-start">
+                <div className="w-6 h-6 rounded-lg bg-blue-700 flex items-center justify-center flex-shrink-0 mb-5">
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z"
+                      fill="white"
+                      fillOpacity="0.9"
+                    />
+                  </svg>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                  <div className="flex gap-1 items-center h-4">
+                    {[0, 0.2, 0.4].map((delay, i) => (
+                      <div
+                        key={i}
+                        className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce"
+                        style={{ animationDelay: `${delay}s`, animationDuration: "1.4s" }}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="px-4 py-3 border-t border-gray-200 bg-white">
-        <div className="flex gap-2">
-          <Textarea
+
+      {/* Input area */}
+      <div className="px-4 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+        <div className="flex items-end gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 focus-within:bg-white transition-all">
+          <textarea
+            ref={textareaRef}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => {
+            onChange={handleTextareaInput}
+            onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            placeholder="Type a message..."
-            rows={2}
+            placeholder={
+              document
+                ? `Ask about "${document.name}"...`
+                : "Ask AI anything..."
+            }
+            rows={1}
             disabled={isSending}
-            className="resize-none text-sm"
+            className="flex-1 bg-transparent border-0 outline-none resize-none text-sm text-slate-800 placeholder-slate-400 min-h-[20px] max-h-[120px] py-0.5 disabled:opacity-50"
+            style={{ lineHeight: "1.5" }}
           />
-          <Button 
-            onClick={handleSend} 
+          <button
+            onClick={handleSend}
             disabled={isSending || !inputValue.trim()}
-            className="self-end"
-            size="sm"
+            className={cn(
+              "flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
+              inputValue.trim() && !isSending
+                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+            )}
           >
-            {isSending ? "..." : "Send"}
-          </Button>
+            {isSending ? (
+              <div className="w-3 h-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
+        <p className="text-[11px] text-slate-400 mt-2 text-center">
+          Enter to send · Shift+Enter for new line
+        </p>
       </div>
     </div>
   );
 };
-
-
-

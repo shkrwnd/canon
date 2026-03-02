@@ -1,23 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  User, 
-  LogOut, 
-  Settings, 
+import {
+  LayoutDashboard,
+  User,
+  LogOut,
+  Settings,
   Menu,
   X,
-  ChevronDown,
   Search,
   FileText,
   Clock,
-  Sparkles,
-  HelpCircle
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useProjects } from "../../hooks/useProjects";
-import { useDocuments } from "../../hooks/useDocuments";
-import { Project, Document } from "../../types";
+import { Project } from "../../types";
 import { cn } from "../../utils/cn";
 import { Input } from "../ui";
 
@@ -34,7 +30,6 @@ export const Header: React.FC = () => {
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Get user initials for avatar
   const userInitials = useMemo(() => {
     const email = userEmail ?? "";
     const parts = email.split("@")[0].split(".");
@@ -53,33 +48,38 @@ export const Header: React.FC = () => {
   const isWorkspace = location.pathname === "/workspace";
   const isProfile = location.pathname === "/profile";
 
-  // Filter projects based on search query
-  // Note: For now, we'll only search projects. Document search can be added later
-  // when we have a better way to fetch all documents across projects
   const filteredProjects = useMemo(() => {
     if (!projects || !searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return projects.filter((project) =>
-      project.name.toLowerCase().includes(query) ||
-      project.description?.toLowerCase().includes(query)
+    return projects.filter(
+      (project) =>
+        project.name.toLowerCase().includes(query) ||
+        project.description?.toLowerCase().includes(query)
     );
   }, [projects, searchQuery]);
 
-  // Get recent projects (last 5 accessed/modified)
   const recentProjects = useMemo(() => {
     if (!projects) return [];
     return [...projects]
-      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      )
       .slice(0, 5);
   }, [projects]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
         setUserMenuOpen(false);
       }
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
         setSearchOpen(false);
         setSearchQuery("");
       }
@@ -94,11 +94,12 @@ export const Header: React.FC = () => {
     };
   }, [userMenuOpen, searchOpen]);
 
-  // Keyboard shortcut for search (Cmd/Ctrl + K)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
         if ((event.metaKey || event.ctrlKey) && event.key === "k") {
           event.preventDefault();
           setSearchOpen(true);
@@ -124,7 +125,6 @@ export const Header: React.FC = () => {
     };
   }, [searchOpen]);
 
-  // Focus input when search opens
   useEffect(() => {
     if (searchOpen) {
       setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -136,20 +136,20 @@ export const Header: React.FC = () => {
     setSearchQuery("");
     navigate("/workspace");
     setTimeout(() => {
-      // Select the project
-      window.dispatchEvent(new CustomEvent("selectProject", { 
-        detail: { projectId: project.id } 
-      }));
+      window.dispatchEvent(
+        new CustomEvent("selectProject", {
+          detail: { projectId: project.id },
+        })
+      );
     }, 100);
   };
 
-  // Highlight search query in text
   const highlightText = (text: string, query: string) => {
     if (!query.trim()) return text;
     const parts = text.split(new RegExp(`(${query})`, "gi"));
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase() ? (
-        <mark key={i} className="bg-yellow-200 text-gray-900 px-0.5 rounded">
+        <mark key={i} className="bg-blue-100 text-blue-900 px-0.5 rounded">
           {part}
         </mark>
       ) : (
@@ -174,31 +174,26 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 shadow-soft">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo and Brand */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/workspace")}
-              className="flex items-center gap-2 hover:opacity-90 transition-all duration-200 group"
-            >
-              <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 rounded-xl shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-bold text-gray-900 hidden sm:inline-block leading-tight">
-                  Canon
-                </span>
-                <span className="text-xs text-gray-500 hidden lg:inline-block leading-tight">
-                  Living Documents
-                </span>
-              </div>
-            </button>
-          </div>
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white">
+      <div className="px-4 sm:px-6">
+        <div className="flex h-12 items-center justify-between">
+          {/* Logo */}
+          <button
+            onClick={() => navigate("/workspace")}
+            className="flex items-center gap-2.5 group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-blue-700 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 transition-colors shadow-sm">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2h3.5v3.5H2V2zM6.5 2H10v3.5H6.5V2zM2 6.5h3.5V10H2V6.5zM6.5 6.5H10V10H6.5V6.5z" fill="white" fillOpacity="0.9"/>
+              </svg>
+            </div>
+            <span className="text-sm font-bold text-slate-900 tracking-tight hidden sm:block">
+              Canon
+            </span>
+          </button>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-0.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -209,25 +204,22 @@ export const Header: React.FC = () => {
                     setMobileMenuOpen(false);
                   }}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative",
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-all duration-150",
                     item.isActive
-                      ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      ? "text-blue-700 bg-blue-50 font-semibold"
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-medium"
                   )}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5" />
                   {item.label}
-                  {item.isActive && (
-                    <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full" />
-                  )}
                 </button>
               );
             })}
           </nav>
 
-          {/* Right Side - Search and User Menu */}
+          {/* Right: Search + User */}
           <div className="flex items-center gap-2">
-            {/* Search Button */}
+            {/* Search */}
             <div className="relative" ref={searchRef}>
               <button
                 onClick={() => {
@@ -236,19 +228,18 @@ export const Header: React.FC = () => {
                     setTimeout(() => searchInputRef.current?.focus(), 0);
                   }
                 }}
-                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm hover:shadow"
-                title="Search projects and documents (⌘K)"
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-all text-slate-500 text-sm"
+                title="Search (⌘K)"
               >
-                <Search className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-500 min-w-[140px] text-left">
-                  {searchQuery || "Search projects..."}
+                <Search className="w-3.5 h-3.5" />
+                <span className="min-w-[120px] text-left text-slate-400">
+                  Search...
                 </span>
-                <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-gray-500 bg-gray-100 border border-gray-200 rounded">
-                  <span className="text-xs">⌘</span>K
+                <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs text-slate-400 bg-white border border-slate-200 rounded-md font-mono">
+                  ⌘K
                 </kbd>
               </button>
 
-              {/* Mobile Search Button */}
               <button
                 onClick={() => {
                   setSearchOpen(!searchOpen);
@@ -256,201 +247,176 @@ export const Header: React.FC = () => {
                     setTimeout(() => searchInputRef.current?.focus(), 0);
                   }
                 }}
-                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors relative"
+                className="md:hidden p-1.5 rounded-md hover:bg-slate-100 transition-colors text-slate-500"
                 aria-label="Search"
               >
-                <Search className="w-5 h-5 text-gray-700" />
-                {searchOpen && (
-                  <span className="absolute top-0 right-0 w-2 h-2 bg-blue-600 rounded-full" />
-                )}
+                <Search className="w-4 h-4" />
               </button>
 
-              {/* Search Dropdown */}
+              {/* Search dropdown */}
               {searchOpen && (
-                <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-xl bg-white border-2 border-gray-200 shadow-large z-50 overflow-hidden animate-slide-down">
-                  <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 via-blue-50/50 to-white">
+                <div className="absolute right-0 top-full mt-1.5 w-80 rounded-xl bg-white border border-slate-200 shadow-lg z-50 overflow-hidden animate-slide-down">
+                  <div className="p-2 border-b border-slate-100">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                       <Input
                         ref={searchInputRef}
                         type="text"
-                        placeholder="Search projects and documents..."
+                        placeholder="Search projects..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 pr-10"
+                        className="pl-8 pr-8 h-8 text-sm border-0 bg-slate-50 focus:bg-white"
                       />
                       {searchQuery && (
                         <button
                           onClick={() => setSearchQuery("")}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
                   </div>
-                  
-                  <div className="max-h-96 overflow-y-auto">
+
+                  <div className="max-h-72 overflow-y-auto">
                     {searchQuery.trim() === "" ? (
                       <div>
                         {recentProjects.length > 0 && (
-                          <div className="p-3 border-b border-gray-100 bg-gray-50">
-                            <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
-                              <Clock className="w-3.5 h-3.5" />
-                              Recent Projects
+                          <div className="py-1">
+                            <div className="px-3 py-1.5 flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Recent</span>
                             </div>
-                            <div className="space-y-1">
-                              {recentProjects.map((project) => (
-                                <button
-                                  key={project.id}
-                                  onClick={() => handleProjectSelect(project)}
-                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-gray-700 hover:bg-white rounded transition-colors"
-                                >
-                                  <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="truncate">{project.name}</span>
-                                </button>
-                              ))}
-                            </div>
+                            {recentProjects.map((project) => (
+                              <button
+                                key={project.id}
+                                onClick={() => handleProjectSelect(project)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                <span className="truncate">{project.name}</span>
+                              </button>
+                            ))}
                           </div>
                         )}
-                        <div className="p-4 text-center">
-                          <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Start typing to search projects and documents...</p>
-                          <p className="text-xs text-gray-400 mt-1">Press ⌘K to search anytime</p>
-                        </div>
+                        {recentProjects.length === 0 && (
+                          <div className="px-3 py-6 text-center text-sm text-slate-400">
+                            Type to search projects
+                          </div>
+                        )}
                       </div>
                     ) : filteredProjects.length === 0 ? (
-                      <div className="p-8 text-center">
-                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-sm font-medium text-gray-900 mb-1">No projects found</p>
-                        <p className="text-xs text-gray-500">
-                          No projects match "{searchQuery}"
-                        </p>
+                      <div className="px-3 py-6 text-center">
+                        <p className="text-sm text-slate-500">No results for "{searchQuery}"</p>
                       </div>
                     ) : (
-                      <div className="py-2">
-                        <div className="px-3 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
-                          {filteredProjects.length} {filteredProjects.length === 1 ? "result" : "results"}
-                        </div>
+                      <div className="py-1">
                         {filteredProjects.map((project) => (
                           <button
                             key={project.id}
                             onClick={() => handleProjectSelect(project)}
-                            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 group"
+                            className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                           >
-                            <div className="flex-shrink-0 mt-0.5">
-                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center group-hover:from-purple-200 group-hover:to-purple-300 transition-colors">
-                                <FileText className="w-5 h-5 text-purple-600" />
-                              </div>
-                            </div>
+                            <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
+                              <p className="text-sm font-medium text-slate-800 truncate">
                                 {highlightText(project.name, searchQuery)}
                               </p>
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                                {project.description || "Project"}
-                              </p>
+                              {project.description && (
+                                <p className="text-xs text-slate-400 mt-0.5 truncate">
+                                  {project.description}
+                                </p>
+                              )}
                             </div>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
-                  
-                  {searchQuery.trim() !== "" && filteredProjects.length > 0 && (
-                    <div className="p-2 border-t border-gray-200 bg-gray-50">
-                      <p className="text-xs text-gray-500 text-center">
-                        Press <kbd className="px-1.5 py-0.5 bg-white border border-gray-200 rounded text-xs">Enter</kbd> to select first result
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* User Dropdown */}
+            {/* User menu */}
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 group"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 rounded-full shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
-                  <span className="text-sm font-semibold text-white">
+                <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-white leading-none">
                     {userInitials}
                   </span>
                 </div>
-                <ChevronDown
+                <svg
                   className={cn(
-                    "w-4 h-4 text-gray-600 transition-transform hidden md:block",
+                    "w-3 h-3 text-slate-400 transition-transform hidden md:block",
                     userMenuOpen && "rotate-180"
                   )}
-                />
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
 
-              {/* Dropdown Menu */}
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white border-2 border-gray-200 shadow-large z-50 overflow-hidden animate-slide-down">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-blue-50/50 to-white">
-                    <p className="text-sm font-semibold text-gray-900">User Account</p>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{userEmail ?? "—"}</p>
+                <div className="absolute right-0 mt-1.5 w-56 rounded-xl bg-white border border-slate-200 shadow-lg z-50 overflow-hidden animate-slide-down">
+                  <div className="px-3.5 py-3 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-900">Account</p>
+                    <p className="text-xs text-slate-400 mt-0.5 truncate">
+                      {userEmail ?? "—"}
+                    </p>
                   </div>
-                  
-                  <div className="py-1">
+
+                  <div className="py-1.5 px-1.5">
                     <button
-                      onClick={() => {
-                        navigate("/profile");
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => { navigate("/profile"); setUserMenuOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors"
                     >
-                      <User className="w-4 h-4" />
-                      <span>Profile Settings</span>
+                      <User className="w-3.5 h-3.5" />
+                      Profile Settings
                     </button>
-
                     <button
-                      onClick={() => {
-                        navigate("/profile");
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => { navigate("/profile"); setUserMenuOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-colors"
                     >
-                      <Settings className="w-4 h-4" />
-                      <span>Settings</span>
+                      <Settings className="w-3.5 h-3.5" />
+                      Settings
                     </button>
-
-                    <div className="border-t border-gray-100 my-1" />
-
+                    <div className="border-t border-slate-100 my-1.5" />
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                     >
-                      <LogOut className="w-4 h-4" />
-                      <span>Logout</span>
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign out
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile menu */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors relative"
-              aria-label="Toggle menu"
+              className="md:hidden p-1.5 rounded-md hover:bg-slate-100 transition-colors text-slate-500"
+              aria-label="Menu"
             >
               {mobileMenuOpen ? (
-                <X className="w-5 h-5 text-gray-700" />
+                <X className="w-4 h-4" />
               ) : (
-                <Menu className="w-5 h-5 text-gray-700" />
+                <Menu className="w-4 h-4" />
               )}
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation Menu */}
+        {/* Mobile nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-4 bg-white">
-            <nav className="flex flex-col gap-1">
+          <div className="md:hidden border-t border-slate-100 py-2">
+            <nav className="flex flex-col gap-0.5">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -461,24 +427,24 @@ export const Header: React.FC = () => {
                       setMobileMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all",
+                      "flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors",
                       item.isActive
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-100"
+                        ? "bg-blue-50 text-blue-700 font-medium"
+                        : "text-slate-600 hover:bg-slate-50"
                     )}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-4 h-4" />
                     {item.label}
                   </button>
                 );
               })}
-              <div className="border-t border-gray-200 my-2" />
+              <div className="border-t border-slate-100 my-1" />
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="flex items-center gap-2.5 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-md transition-colors"
               >
-                <LogOut className="w-5 h-5" />
-                Logout
+                <LogOut className="w-4 h-4" />
+                Sign out
               </button>
             </nav>
           </div>

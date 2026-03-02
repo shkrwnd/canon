@@ -5,6 +5,11 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -48,10 +53,10 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        'soft': '0 2px 8px 0 rgba(0, 0, 0, 0.04)',
-        'medium': '0 4px 16px 0 rgba(0, 0, 0, 0.08)',
-        'large': '0 8px 32px 0 rgba(0, 0, 0, 0.12)',
-        'glow': '0 0 20px rgba(59, 130, 246, 0.3)',
+        'soft': '0 1px 4px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
+        'medium': '0 4px 12px 0 rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04)',
+        'large': '0 8px 24px 0 rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.06)',
+        'glow': '0 0 16px rgba(99, 102, 241, 0.25)',
       },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in-out',

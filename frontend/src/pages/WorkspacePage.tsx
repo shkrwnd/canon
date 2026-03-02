@@ -77,7 +77,7 @@ export const WorkspacePage: React.FC = () => {
         onSelectProject={handleProjectSelected}
         onSelectDocument={handleDocumentSelected}
       />
-      <div className="flex-1 flex-shrink-0">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <DocumentView 
           document={selectedDocument} 
           projectId={selectedProject?.id || null}

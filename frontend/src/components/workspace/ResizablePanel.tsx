@@ -66,7 +66,7 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
         <div
           ref={resizeRef}
           onMouseDown={startResizing}
-          className={`absolute ${resizeHandlePosition} top-0 w-1 h-full cursor-col-resize hover:bg-blue-500 bg-transparent transition-colors z-10`}
+          className={`absolute ${resizeHandlePosition} top-0 w-1 h-full cursor-col-resize hover:bg-blue-500/40 bg-transparent transition-colors z-10`}
           style={{ touchAction: "none" }}
         />
       )}
@@ -75,7 +75,7 @@ export const ResizablePanel: React.FC<ResizablePanelProps> = ({
         <div
           ref={resizeRef}
           onMouseDown={startResizing}
-          className={`absolute ${resizeHandlePosition} top-0 w-1 h-full cursor-col-resize hover:bg-blue-500 bg-transparent transition-colors z-10`}
+          className={`absolute ${resizeHandlePosition} top-0 w-1 h-full cursor-col-resize hover:bg-blue-500/40 bg-transparent transition-colors z-10`}
           style={{ touchAction: "none" }}
         />
       )}
